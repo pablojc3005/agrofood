@@ -6,15 +6,34 @@ import {
     LogOut,
     Leaf,
     X,
+    Users,
+    Building2,
+    BarChart3,
+    CalendarCheck,
+    History,
 } from 'lucide-react';
 
-const menuItems = [
+const adminMenu = [
     { to: '/', label: 'Dashboard', icon: LayoutDashboard },
+    { to: '/areas', label: 'Áreas', icon: Building2 },
+    { to: '/trabajadores', label: 'Trabajadores', icon: Users },
     { to: '/platos', label: 'Platos / Menú', icon: UtensilsCrossed },
+    { to: '/reportes', label: 'Reportes de Consumo', icon: BarChart3 },
+];
+
+const empleadoMenu = [
+    { to: '/', label: 'Dashboard', icon: LayoutDashboard },
+    { to: '/seleccionar-menu', label: 'Seleccionar Menú', icon: CalendarCheck },
+    { to: '/mi-historial', label: 'Mi Historial', icon: History },
 ];
 
 export default function Sidebar({ isOpen, onClose }) {
     const { logout, user } = useAuth();
+    const menuItems = user?.role === 'ADMIN' ? adminMenu : empleadoMenu;
+
+    const roleBadge = user?.role === 'ADMIN'
+        ? { text: 'Admin', color: 'bg-amber-500/20 text-amber-400' }
+        : { text: 'Empleado', color: 'bg-blue-500/20 text-blue-400' };
 
     return (
         <>
@@ -59,11 +78,14 @@ export default function Sidebar({ isOpen, onClose }) {
                         <div className="w-9 h-9 rounded-full bg-primary-light/20 flex items-center justify-center text-primary-light font-bold text-sm">
                             {user?.name?.charAt(0)?.toUpperCase() || 'U'}
                         </div>
-                        <div className="overflow-hidden">
+                        <div className="overflow-hidden flex-1">
                             <p className="text-sm font-medium truncate">{user?.name || 'Usuario'}</p>
                             <p className="text-xs text-gray-400 truncate">{user?.email || ''}</p>
                         </div>
                     </div>
+                    <span className={`inline-block mt-2 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${roleBadge.color}`}>
+                        {roleBadge.text}
+                    </span>
                 </div>
 
                 {/* Nav */}

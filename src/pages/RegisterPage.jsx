@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { Leaf, Eye, EyeOff } from 'lucide-react';
+import Swal from 'sweetalert2';
 
 export default function RegisterPage() {
     const { register } = useAuth();
@@ -14,7 +15,6 @@ export default function RegisterPage() {
         confirmPassword: '',
     });
     const [showPassword, setShowPassword] = useState(false);
-    const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
 
     const handleChange = (e) => {
@@ -23,29 +23,61 @@ export default function RegisterPage() {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        setError('');
 
         if (!form.name || !form.email || !form.password || !form.confirmPassword) {
-            setError('Por favor completa todos los campos');
+            Swal.fire({
+                icon: 'warning',
+                title: 'Campos incompletos',
+                text: 'Por favor completa todos los campos',
+                confirmButtonColor: '#16a34a',
+            });
             return;
         }
 
         if (form.password !== form.confirmPassword) {
-            setError('Las contraseñas no coinciden');
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: 'Las contraseñas no coinciden',
+                confirmButtonColor: '#16a34a',
+            });
             return;
         }
 
         if (form.password.length < 6) {
-            setError('La contraseña debe tener al menos 6 caracteres');
+            Swal.fire({
+                icon: 'warning',
+                title: 'Contraseña débil',
+                text: 'La contraseña debe tener al menos 6 caracteres',
+                confirmButtonColor: '#16a34a',
+            });
             return;
         }
 
         try {
             setLoading(true);
-            await register(form.name, form.email, form.password);
+            const user = await register(form.name, form.email, form.password);
+
+            const Toast = Swal.mixin({
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 2000,
+                timerProgressBar: true,
+            });
+            Toast.fire({
+                icon: 'success',
+                title: `¡Cuenta creada, ${user.name}!`,
+            });
+
             navigate('/');
         } catch (err) {
-            setError(err.message || 'Error al registrarse');
+            Swal.fire({
+                icon: 'error',
+                title: 'Error al registrarse',
+                text: err.message || 'No se pudo crear la cuenta',
+                confirmButtonColor: '#16a34a',
+            });
         } finally {
             setLoading(false);
         }
@@ -73,12 +105,6 @@ export default function RegisterPage() {
                 {/* Card */}
                 <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl shadow-2xl p-8">
                     <h3 className="text-xl font-semibold text-white mb-6">Registro</h3>
-
-                    {error && (
-                        <div className="mb-4 px-4 py-3 rounded-lg bg-red-500/20 border border-red-500/30 text-red-200 text-sm">
-                            {error}
-                        </div>
-                    )}
 
                     <form onSubmit={handleSubmit} className="space-y-4">
                         <div>

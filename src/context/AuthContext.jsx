@@ -16,17 +16,29 @@ export function AuthProvider({ children }) {
         }
     }, [user]);
 
-    // TODO: Reemplazar con llamadas API reales
+    // TODO: Reemplazar con llamadas API reales (api.post('/auth/login', ...))
     const login = async (email, password) => {
-        // Simulación — aceptar cualquier credencial por ahora
-        const mockUser = { id: 1, name: 'Usuario', email };
+        // Simulación: si el email contiene "admin" → rol ADMIN, sino EMPLEADO
+        const role = email.toLowerCase().includes('admin') ? 'ADMIN' : 'EMPLEADO';
+        const mockUser = {
+            id: 1,
+            name: role === 'ADMIN' ? 'Administrador' : 'Empleado',
+            email,
+            role,
+            token: 'mock-jwt-token',
+        };
         setUser(mockUser);
         return mockUser;
     };
 
     const register = async (name, email, password) => {
-        // Simulación — crear usuario mock
-        const mockUser = { id: Date.now(), name, email };
+        const mockUser = {
+            id: Date.now(),
+            name,
+            email,
+            role: 'EMPLEADO',
+            token: 'mock-jwt-token',
+        };
         setUser(mockUser);
         return mockUser;
     };

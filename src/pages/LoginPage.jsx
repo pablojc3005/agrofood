@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { Leaf, Eye, EyeOff } from 'lucide-react';
+import Swal from 'sweetalert2';
 
 export default function LoginPage() {
     const { login } = useAuth();
@@ -9,7 +10,6 @@ export default function LoginPage() {
 
     const [form, setForm] = useState({ email: '', password: '' });
     const [showPassword, setShowPassword] = useState(false);
-    const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
 
     const handleChange = (e) => {
@@ -18,19 +18,41 @@ export default function LoginPage() {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        setError('');
 
         if (!form.email || !form.password) {
-            setError('Por favor completa todos los campos');
+            Swal.fire({
+                icon: 'warning',
+                title: 'Campos incompletos',
+                text: 'Por favor completa todos los campos',
+                confirmButtonColor: '#16a34a',
+            });
             return;
         }
 
         try {
             setLoading(true);
-            await login(form.email, form.password);
+            const user = await login(form.email, form.password);
+
+            const Toast = Swal.mixin({
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 2000,
+                timerProgressBar: true,
+            });
+            Toast.fire({
+                icon: 'success',
+                title: `¡Bienvenido, ${user.name}!`,
+            });
+
             navigate('/');
         } catch (err) {
-            setError(err.message || 'Error al iniciar sesión');
+            Swal.fire({
+                icon: 'error',
+                title: 'Error de acceso',
+                text: err.message || 'Credenciales incorrectas',
+                confirmButtonColor: '#16a34a',
+            });
         } finally {
             setLoading(false);
         }
@@ -58,12 +80,6 @@ export default function LoginPage() {
                 {/* Card */}
                 <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl shadow-2xl p-8">
                     <h3 className="text-xl font-semibold text-white mb-6">Iniciar Sesión</h3>
-
-                    {error && (
-                        <div className="mb-4 px-4 py-3 rounded-lg bg-red-500/20 border border-red-500/30 text-red-200 text-sm">
-                            {error}
-                        </div>
-                    )}
 
                     <form onSubmit={handleSubmit} className="space-y-5">
                         <div>
@@ -101,6 +117,10 @@ export default function LoginPage() {
                                     {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                                 </button>
                             </div>
+                        </div>
+
+                        <div className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-green-200/60">
+                            <p>💡 <strong>Tip:</strong> Usa un email con "admin" para entrar como Administrador.</p>
                         </div>
 
                         <button

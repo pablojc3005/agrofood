@@ -1,31 +1,39 @@
-const BASE_URL = 'http://localhost:8080/api'; // TODO: Ajustar cuando tengas tu API
+import axios from 'axios';
 
-async function request(endpoint, options = {}) {
-    const user = localStorage.getItem('agrofood_user');
-    const token = user ? JSON.parse(user).token : null;
+const BASE_URL = 'http://localhost:8080/api'; // TODO: Ajustar con tu API
 
-    const headers = {
+const api = axios.create({
+    baseURL: BASE_URL,
+    headers: {
         'Content-Type': 'application/json',
-        ...(token && { Authorization: `Bearer ${token}` }),
-        ...options.headers,
-    };
+    },
+});
 
-    const response = await fetch(`${BASE_URL}${endpoint}`, {
-        ...options,
-        headers,
-    });
+// Interceptor de request — adjunta token automáticamente
+api.interceptors.request.use(
+    (config) => {
+        const stored = localStorage.getItem('agrofood_user');
+        if (stored) {
+            const user = JSON.parse(stored);
+            if (user.token) {
+                config.headers.Authorization = `Bearer ${user.token}`;
+            }
+        }
+        return config;
+    },
+    (error) => Promise.reject(error)
+);
 
-    if (!response.ok) {
-        const error = await response.json().catch(() => ({ message: 'Error del servidor' }));
-        throw new Error(error.message || `HTTP ${response.status}`);
+// Interceptor de response — manejo global de errores
+api.interceptors.response.use(
+    (response) => response.data,
+    (error) => {
+        const message =
+            error.response?.data?.message ||
+            error.response?.statusText ||
+            'Error de conexión con el servidor';
+        return Promise.reject(new Error(message));
     }
+);
 
-    return response.json();
-}
-
-export const api = {
-    get: (endpoint) => request(endpoint, { method: 'GET' }),
-    post: (endpoint, data) => request(endpoint, { method: 'POST', body: JSON.stringify(data) }),
-    put: (endpoint, data) => request(endpoint, { method: 'PUT', body: JSON.stringify(data) }),
-    del: (endpoint) => request(endpoint, { method: 'DELETE' }),
-};
+export default api;
