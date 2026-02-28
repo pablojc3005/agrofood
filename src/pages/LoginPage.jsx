@@ -59,7 +59,7 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-900 via-green-800 to-emerald-900 px-4 relative overflow-hidden">
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 to-green-700 from-slate-900 px-4 relative overflow-hidden">
             {/* Decoración de fondo */}
             <div className="absolute inset-0 overflow-hidden">
                 <div className="absolute -top-40 -right-40 w-80 h-80 bg-green-500/10 rounded-full blur-3xl" />
@@ -69,12 +69,14 @@ export default function LoginPage() {
 
             <div className="relative w-full max-w-md">
                 {/* Logo */}
-                <div className="text-center mb-8">
-                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary shadow-lg shadow-primary/30 mb-4">
-                        <Leaf className="w-8 h-8 text-white" />
-                    </div>
-                    <h2 className="text-3xl font-bold text-white">AgroFood</h2>
-                    <p className="text-green-200/70 mt-1">Gestión de comidas del personal</p>
+                <div className="text-center mb-4">
+                    <img src="../src/assets/agrofood.png" alt="Logo" className="inline-flex items-center justify-center w-60% h-60% rounded-2xl" />
+
+                    <h2>
+                        <span className="text-6xl font-bold text-white">Agro</span>
+                        <span className="text-6xl font-bold text-green-600">Food</span>
+                    </h2>
+                    <p className="text-green-200/70 mt-3">Gestión de comidas del personal</p>
                 </div>
 
                 {/* Card */}
@@ -119,9 +121,9 @@ export default function LoginPage() {
                             </div>
                         </div>
 
-                        <div className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-green-200/60">
+                        {/*<div className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-green-200/60">
                             <p>💡 <strong>Tip:</strong> Usa un email con "admin" para entrar como Administrador.</p>
-                        </div>
+                        </div>*/}
 
                         <button
                             type="submit"
