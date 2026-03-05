@@ -288,7 +288,7 @@ export default function CategoriasPlatoPage() {
                                 <button
                                     type="button"
                                     onClick={() => setShowModal(false)}
-                                    className="flex-1 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium transition-colors cursor-pointer inline-flex items-center justify-center gap-2"
+                                    className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-medium transition-colors cursor-pointer inline-flex items-center justify-center gap-2"
                                 >
                                     <X className="w-5 h-5" />
                                     Cancelar

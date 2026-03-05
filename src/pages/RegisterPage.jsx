@@ -95,7 +95,7 @@ export default function RegisterPage() {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-900 via-green-800 to-emerald-900 px-4 py-12 relative overflow-hidden">
+        <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-green-900 via-green-800 to-emerald-900 px-4 py-12 relative overflow-hidden">
             {/* Decoración de fondo */}
             <div className="absolute inset-0 overflow-hidden">
                 <div className="absolute -top-40 -left-40 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl" />
@@ -119,7 +119,7 @@ export default function RegisterPage() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {/* Username */}
                             <div>
-                                <label className="block text-sm font-medium text-green-100 mb-1.5 flex items-center gap-2">
+                                <label className="block text-sm font-medium text-green-100 mb-1.5 items-center gap-2">
                                     <User className="w-4 h-4" /> Nombre de usuario *
                                 </label>
                                 <input
@@ -134,7 +134,7 @@ export default function RegisterPage() {
 
                             {/* Email */}
                             <div>
-                                <label className="block text-sm font-medium text-green-100 mb-1.5 flex items-center gap-2">
+                                <label className="block text-sm font-medium text-green-100 mb-1.5 items-center gap-2">
                                     <Mail className="w-4 h-4" /> Correo electrónico
                                 </label>
                                 <input
@@ -151,7 +151,7 @@ export default function RegisterPage() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {/* Password */}
                             <div>
-                                <label className="block text-sm font-medium text-green-100 mb-1.5 flex items-center gap-2">
+                                <label className="block text-sm font-medium text-green-100 mb-1.5 items-center gap-2">
                                     <Lock className="w-4 h-4" /> Contraseña *
                                 </label>
                                 <div className="relative">
@@ -175,7 +175,7 @@ export default function RegisterPage() {
 
                             {/* Confirm Password */}
                             <div>
-                                <label className="block text-sm font-medium text-green-100 mb-1.5 flex items-center gap-2">
+                                <label className="block text-sm font-medium text-green-100 mb-1.5 items-center gap-2">
                                     <Shield className="w-4 h-4" /> Confirmar *
                                 </label>
                                 <input
@@ -192,7 +192,7 @@ export default function RegisterPage() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {/* Rol */}
                             <div>
-                                <label className="block text-sm font-medium text-green-100 mb-1.5 flex items-center gap-2">
+                                <label className="block text-sm font-medium text-green-100 mb-1.5 items-center gap-2">
                                     <Shield className="w-4 h-4" /> Asignar Rol *
                                 </label>
                                 <select
@@ -212,7 +212,7 @@ export default function RegisterPage() {
 
                             {/* Trabajador */}
                             <div>
-                                <label className="block text-sm font-medium text-green-100 mb-1.5 flex items-center gap-2">
+                                <label className="block text-sm font-medium text-green-100 mb-1.5 items-center gap-2">
                                     <Contact className="w-4 h-4" /> Vincular Trabajador
                                 </label>
                                 <select

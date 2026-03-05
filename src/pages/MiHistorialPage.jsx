@@ -1,11 +1,16 @@
 import { useState, useEffect, useMemo } from 'react';
-import { History, Search, Calendar, ChevronRight, Loader2 } from 'lucide-react';
+import { History, Search, Calendar, ChevronRight, Loader2, Pencil, Trash2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useHistorialStore } from '../store/useHistorialStore';
+import { usePedidoStore } from '../store/usePedidoStore';
+import Swal from 'sweetalert2';
 
 export default function MiHistorialPage() {
     const { user } = useAuth();
+    const navigate = useNavigate();
     const { historial, fetchHistorialUsuario, loading } = useHistorialStore();
+    const { deletePedido } = usePedidoStore();
 
     const [search, setSearch] = useState('');
 
@@ -37,6 +42,42 @@ export default function MiHistorialPage() {
             costo: acc.costo + (curr.costoTotal || 0)
         }), { raciones: 0, costo: 0 });
     }, [filtered]);
+
+    const hoyStr = useMemo(() => {
+        const d = new Date();
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }, []);
+
+    const handleModify = () => {
+        navigate('/seleccionar-menu', { state: { fromModify: true } });
+    };
+
+    const handleCancel = async (idPedido) => {
+        const result = await Swal.fire({
+            title: '¿Estás seguro?',
+            text: "Se cancelará tu pedido de hoy.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#ef4444',
+            cancelButtonColor: '#111827',
+            confirmButtonText: 'Sí, cancelar',
+            cancelButtonText: 'No, mantener'
+        });
+
+        if (result.isConfirmed) {
+            try {
+                await deletePedido(idPedido);
+                Swal.fire('Cancelado', 'Tu pedido ha sido eliminado.', 'success');
+                // Recargar historial
+                fetchHistorialUsuario(user.idUsuario, fechaDesde, fechaHasta);
+            } catch (err) {
+                Swal.fire('Error', 'No se pudo cancelar: ' + err.message, 'error');
+            }
+        }
+    };
 
     return (
         <div className="space-y-6 max-w-5xl mx-auto pb-20">
@@ -137,7 +178,7 @@ export default function MiHistorialPage() {
                                 </tr>
                             ) : (
                                 filtered.map((h, idx) => (
-                                    <tr key={`${h.fecha}-${idx}`} className="group hover:bg-primary/[0.02] transition-colors">
+                                    <tr key={`${h.fecha}-${idx}`} className="group hover:bg-primary/2 transition-colors">
                                         <td className="px-6 py-4">
                                             <div className="bg-gray-50 rounded-2xl p-2 inline-block text-center min-w-[60px] group-hover:bg-white transition-colors">
                                                 <p className="font-black text-gray-800 text-lg leading-tight">{new Date(h.fecha + 'T12:00:00').getDate()}</p>
@@ -150,20 +191,45 @@ export default function MiHistorialPage() {
                                                 <span className="text-base text-gray-800 font-bold group-hover:text-primary transition-colors">Segundo: {h.segundo}</span>
                                             </div>
                                         </td>
+                                        <td className="px-6 py-4">
+                                            <div className="flex flex-col">
+                                                <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-0.5">Entrada: {h.entrada || 'No especificada'}</span>
+                                                <span className="text-base text-gray-800 font-bold group-hover:text-primary transition-colors">Segundo: {h.segundo}</span>
+                                            </div>
+                                        </td>
                                         <td className="px-6 py-4 text-center">
                                             <div className="flex flex-col items-center">
-                                                <span className={`inline-flex items-center justify-center w-9 h-9 rounded-2xl font-black text-sm shadow-sm ${h.racionesExtra > 0 ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600'}`}>
-                                                    {h.totalRaciones}
-                                                </span>
-                                                {h.racionesExtra > 0 && <span className="text-[9px] text-blue-600 font-black mt-1">+{h.racionesExtra} VISITAS</span>}
+
+                                                <span className="font-black text-gray-900 text-lg">S/ {(h.costoTotal || 0).toFixed(2)}</span>
+                                                {/*
+                                                <div className="w-8 h-8 rounded-full flex items-center justify-center bg-gray-50 text-gray-300 group-hover:bg-primary group-hover:text-white transition-all">
+                                                    <ChevronRight className="w-4 h-4" />
+                                                </div>
+                                                */}
+
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 text-right">
                                             <div className="flex items-center justify-end gap-3">
-                                                <span className="font-black text-gray-900 text-lg">S/ {(h.costoTotal || 0).toFixed(2)}</span>
-                                                <div className="w-8 h-8 rounded-full flex items-center justify-center bg-gray-50 text-gray-300 group-hover:bg-primary group-hover:text-white transition-all">
-                                                    <ChevronRight className="w-4 h-4" />
-                                                </div>
+                                                {h.fecha === hoyStr && (
+                                                    <div className="flex items-center gap-2 mr-4">
+                                                        <button
+                                                            onClick={handleModify}
+                                                            className="p-2 bg-amber-50 text-amber-600 rounded-xl hover:bg-amber-100 transition-colors"
+                                                            title="Modificar pedido"
+                                                        >
+                                                            <Pencil className="w-4 h-4" />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleCancel(h.idPedido)}
+                                                            className="p-2 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors"
+                                                            title="Cancelar pedido"
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                )}
+
                                             </div>
                                         </td>
                                     </tr>

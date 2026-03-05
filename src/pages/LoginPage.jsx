@@ -59,7 +59,7 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 to-green-700 from-slate-900 px-4 relative overflow-hidden">
+        <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-slate-900 to-green-700 px-4 relative overflow-hidden">
             {/* Decoración de fondo */}
             <div className="absolute inset-0 overflow-hidden">
                 <div className="absolute -top-40 -right-40 w-80 h-80 bg-green-500/10 rounded-full blur-3xl" />

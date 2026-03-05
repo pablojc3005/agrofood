@@ -238,7 +238,7 @@ export default function ReportesConsumoPage() {
 
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="bg-gradient-to-br from-primary to-primary-dark p-6 rounded-3xl text-white shadow-xl shadow-primary/30 relative overflow-hidden">
+                <div className="bg-linear-to-br from-primary to-primary-dark p-6 rounded-3xl text-white shadow-xl shadow-primary/30 relative overflow-hidden">
                     <div className="relative z-10">
                         <p className="text-primary-light text-xs font-bold uppercase tracking-widest">Total Raciones</p>
                         <p className="text-5xl font-black mt-2">{stats.totalRaciones}</p>

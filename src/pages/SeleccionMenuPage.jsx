@@ -1,9 +1,11 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
     CalendarCheck, Check, Clock, Users, UserPlus,
     Trash2, AlertCircle, Utensils, ChevronRight,
     CheckCircle2,
-    ArrowRight
+    ArrowRight,
+    History
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { useAuth } from '../hooks/useAuth';
@@ -15,8 +17,10 @@ const HORA_POR_DEFECTO = '10:00';
 
 export default function SeleccionMenuPage() {
     const { user } = useAuth();
+    const location = useLocation();
+    const navigate = useNavigate();
     const { menus, fetchMenus, loading: loadingMenus } = useMenuDiarioStore();
-    const { createPedidoCompleto, loading: loadingPedido } = usePedidoStore();
+    const { createPedidoCompleto, fetchPedidoHoy, loading: loadingPedido } = usePedidoStore();
     const isAdmin = user?.role === 'ADMIN';
 
     const [miEntrada, setMiEntrada] = useState('');
@@ -38,7 +42,18 @@ export default function SeleccionMenuPage() {
 
     useEffect(() => {
         fetchMenus();
-    }, [fetchMenus]);
+
+        const isFromModify = location.state?.fromModify;
+
+        // Verificar si ya existe un pedido hoy
+        if (user?.idUsuario && !isFromModify) {
+            fetchPedidoHoy(user.idUsuario).then(pedidoExistente => {
+                if (pedidoExistente) {
+                    setConfirmado(true);
+                }
+            });
+        }
+    }, [fetchMenus, fetchPedidoHoy, user?.idUsuario, location.state]);
 
     // Filtrar menús usando las propiedades del DTO plano (nombrePlato, nombreCategoria)
     const menuHoyList = useMemo(() =>
@@ -192,14 +207,25 @@ export default function SeleccionMenuPage() {
                     <div>
                         <p className="text-[10px] text-primary font-black uppercase tracking-widest mb-1">Tu Selección</p>
                         <p className="text-xl font-bold text-gray-800 leading-tight">
-                            {miEntrada && <span>{menuHoyList.find(m => m.idMenuDiario === Number(miEntrada))?.nombrePlato} <br /> <ArrowRight className="inline w-4 h-4 text-gray-300 mx-2" /> </span>}
-                            {menuHoyList.find(m => m.idMenuDiario === Number(miSegundo))?.nombrePlato}
+                            {miEntrada && menuHoyList.find(m => m.idMenuDiario === Number(miEntrada)) ? (
+                                <span>{menuHoyList.find(m => m.idMenuDiario === Number(miEntrada))?.nombrePlato} <br /> <ArrowRight className="inline w-4 h-4 text-gray-300 mx-2" /> </span>
+                            ) : null}
+                            {menuHoyList.find(m => m.idMenuDiario === Number(miSegundo))?.nombrePlato || 'Pedido registrado para hoy'}
                         </p>
                     </div>
                 </div>
-                <button onClick={() => setConfirmado(false)} className="mt-12 text-primary font-bold hover:underline">
-                    Realizar otro pedido o cambios
-                </button>
+
+                <div className="mt-12 space-y-4">
+                    <p className="text-sm text-gray-400 font-medium">
+                        ¿Necesitas cambiar algo? Los cambios o cancelaciones se realizan desde tu historial.
+                    </p>
+                    <button
+                        onClick={() => navigate('/mi-historial')}
+                        className="px-8 py-3 bg-gray-900 text-white rounded-2xl font-bold hover:bg-gray-800 transition-all flex items-center gap-2 mx-auto"
+                    >
+                        <History className="w-4 h-4" /> Ir a Mi Historial
+                    </button>
+                </div>
             </div>
         );
     }
@@ -219,7 +245,7 @@ export default function SeleccionMenuPage() {
                         </h1>
                     </div>
 
-                    <div className={`p-6 rounded-[2rem] flex items-center gap-5 border transition-all duration-500 ${tiempoAgotado ? 'bg-red-50 border-red-100' : 'bg-gray-900 border-gray-800 text-white shadow-2xl shadow-gray-200'}`}>
+                    <div className={`p-6 rounded-4xl flex items-center gap-5 border transition-all duration-500 ${tiempoAgotado ? 'bg-red-50 border-red-100' : 'bg-gray-900 border-gray-800 text-white shadow-2xl shadow-gray-200'}`}>
                         <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 ${tiempoAgotado ? 'bg-red-500 text-white animate-pulse' : 'bg-primary text-white'}`}>
                             <Clock className="w-7 h-7" />
                         </div>
@@ -317,7 +343,7 @@ export default function SeleccionMenuPage() {
                         ) : (
                             <div className="space-y-6">
                                 {visitas.map((v, idx) => (
-                                    <div key={v.id} className="relative p-8 bg-gray-50/50 rounded-[2rem] border border-gray-100 group animate-in slide-in-from-right-4 duration-300">
+                                    <div key={v.id} className="relative p-8 bg-gray-50/50 rounded-4xl border border-gray-100 group animate-in slide-in-from-right-4 duration-300">
                                         <button onClick={() => removeVisita(v.id)} className="absolute top-4 right-4 w-10 h-10 bg-white text-gray-300 hover:text-red-500 hover:rotate-12 rounded-2xl shadow-sm flex items-center justify-center transition-all cursor-pointer">
                                             <Trash2 className="w-5 h-5" />
                                         </button>
@@ -349,7 +375,7 @@ export default function SeleccionMenuPage() {
 
                 {/* Sidebar Resumen */}
                 <div className="lg:col-span-4 lg:sticky lg:top-8 self-start">
-                    <div className="bg-gray-900 bg-gradient-to-br from-gray-900 to-gray-800 text-white p-10 rounded-[2.5rem] shadow-[0_30px_60px_-15px_rgba(0,0,0,0.3)] space-y-10 border border-gray-800">
+                    <div className="bg-gray-900 bg-linear-to-br from-gray-900 to-gray-800 text-white p-10 rounded-[2.5rem] shadow-[0_30px_60px_-15px_rgba(0,0,0,0.3)] space-y-10 border border-gray-800">
                         <div className="space-y-2">
                             <h3 className="text-2xl font-black">Resumen</h3>
                             <div className="h-1 w-12 bg-primary rounded-full" />
@@ -381,7 +407,7 @@ export default function SeleccionMenuPage() {
                             onClick={handleConfirmar}
                             disabled={(tiempoAgotado && !isAdmin) || loadingPedido}
                             className={`w-full py-5 rounded-3xl font-black text-lg transition-all flex items-center justify-center gap-3 shadow-2xl active:scale-95 cursor-pointer disabled:opacity-30 disabled:pointer-events-none 
-                                ${tiempoAgotado ? 'bg-gray-800 text-gray-500' : 'bg-primary text-white shadow-primary/30 hover:shadow-primary/50 hover:-translate-y-1'}`}
+                                ${tiempoAgotado && !isAdmin ? 'bg-gray-800 text-gray-500' : 'bg-primary text-white shadow-primary/30 hover:shadow-primary/50 hover:-translate-y-1'}`}
                         >
                             {loadingPedido ? 'PROCESANDO...' : 'CONFIRMAR PEDIDO'}
                             {!loadingPedido && <ArrowRight className="w-5 h-5" />}

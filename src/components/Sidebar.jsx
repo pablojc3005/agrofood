@@ -24,6 +24,7 @@ const adminMenu = [
     { to: '/trabajadores', label: 'Trabajadores', icon: Users },
     { to: '/categorias', label: 'Categorías Menú', icon: Tags }, // Added Categorías Menú link
     { to: '/platos', label: 'Platos / Menú', icon: UtensilsCrossed },
+
     { to: '/configurar-menu', label: 'Gestión Menú Diario', icon: CalendarCheck },
     { to: '/reportes', label: 'Reportes de Consumo', icon: BarChart3 },
 ];
@@ -54,7 +55,7 @@ export default function Sidebar({ isOpen, onClose }) {
 
             <aside
                 className={`
-          fixed top-0 left-0 z-50 h-screen w-64 bg-secondary text-white
+          fixed top-0 left-0 z-50 h-dvh w-64 bg-secondary text-white
           flex flex-col transition-transform duration-300 ease-in-out
           lg:translate-x-0 lg:static lg:z-auto
           ${isOpen ? 'translate-x-0' : '-translate-x-full'}
@@ -100,7 +101,7 @@ export default function Sidebar({ isOpen, onClose }) {
                 </div>
 
                 {/* Nav */}
-                <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+                <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto min-h-0">
                     <p className="px-3 mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-500">
                         Menú Principal
                     </p>
