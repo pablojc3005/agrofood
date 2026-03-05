@@ -11,13 +11,19 @@ import TrabajadoresPage from '../pages/TrabajadoresPage';
 import ReportesConsumoPage from '../pages/ReportesConsumoPage';
 import SeleccionMenuPage from '../pages/SeleccionMenuPage';
 import MiHistorialPage from '../pages/MiHistorialPage';
+import RolesPage from '../pages/RolesPage';
+import UsuariosPage from '../pages/UsuariosPage';
+import MenuDiarioPage from '../pages/MenuDiarioPage';
+import CategoriasPlatoPage from '../pages/CategoriasPlatoPage';
 
 export default function AppRouter() {
+
     return (
         <Routes>
             {/* Rutas públicas */}
             <Route path="/login" element={<LoginPage />} />
-            <Route path="/register" element={<RegisterPage />} />
+            {/* Registro ahora se maneja dentro de UsuariosPage por el Admin */}
+            {/* <Route path="/register" element={<RegisterPage />} /> */}
 
             {/* Rutas protegidas con Sidebar */}
             <Route
@@ -32,6 +38,18 @@ export default function AppRouter() {
                 <Route index element={<DashboardPage />} />
 
                 {/* Rutas exclusivas Admin */}
+                <Route path="usuarios" element={
+                    <RoleRoute allowedRoles={['ADMIN']}>
+                        <UsuariosPage />
+                    </RoleRoute>
+                } />
+                {/* Rutas exclusivas Admin */}
+                <Route path="roles" element={
+                    <RoleRoute allowedRoles={['ADMIN']}>
+                        <RolesPage />
+                    </RoleRoute>
+                } />
+                {/* Rutas exclusivas Admin */}
                 <Route path="areas" element={
                     <RoleRoute allowedRoles={['ADMIN']}>
                         <AreasPage />
@@ -42,9 +60,19 @@ export default function AppRouter() {
                         <TrabajadoresPage />
                     </RoleRoute>
                 } />
+                <Route path="categorias" element={
+                    <RoleRoute allowedRoles={['ADMIN']}>
+                        <CategoriasPlatoPage />
+                    </RoleRoute>
+                } />
                 <Route path="platos" element={
                     <RoleRoute allowedRoles={['ADMIN']}>
                         <MenuPlatosPage />
+                    </RoleRoute>
+                } />
+                <Route path="configurar-menu" element={
+                    <RoleRoute allowedRoles={['ADMIN']}>
+                        <MenuDiarioPage />
                     </RoleRoute>
                 } />
                 <Route path="reportes" element={

@@ -1,25 +1,25 @@
 import { useState, useEffect } from 'react';
-import { Plus, Pencil, Trash2, X, Search, Building2, Save, RefreshCcw } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, Search, Building2, Save, RefreshCcw, ShieldUser } from 'lucide-react';
 import Swal from 'sweetalert2';
-import { useAreaStore } from '../store/useAreaStore';
+import { useRolStore } from '../store/useRolStore';
 
-const emptyForm = { nombreArea: '', cencos: '', activo: true };
+const emptyForm = { nombreRol: '', descripcion: '', activo: true };
 
-export default function AreasPage() {
-    const { areas, fetchAreas, createArea, updateArea, deleteArea, loading } = useAreaStore();
+export default function RolesPage() {
+    const { roles, fetchRoles, createRol, updateRol, deleteRol, loading } = useRolStore();
     const [search, setSearch] = useState('');
     const [showModal, setShowModal] = useState(false);
     const [editingId, setEditingId] = useState(null);
     const [form, setForm] = useState(emptyForm);
 
     useEffect(() => {
-        fetchAreas();
-    }, [fetchAreas]);
+        fetchRoles();
+    }, [fetchRoles]);
 
-    const filtered = areas.filter(
+    const filtered = roles.filter(
         (a) =>
-            a.nombreArea?.toLowerCase().includes(search.toLowerCase()) ||
-            a.cencos?.toLowerCase().includes(search.toLowerCase())
+            a.nombreRol?.toLowerCase().includes(search.toLowerCase()) ||
+            a.descripcion?.toLowerCase().includes(search.toLowerCase())
     );
 
     const openAdd = () => {
@@ -28,16 +28,16 @@ export default function AreasPage() {
         setShowModal(true);
     };
 
-    const openEdit = (area) => {
-        setEditingId(area.idArea);
-        setForm({ nombreArea: area.nombreArea, cencos: area.cencos, activo: area.activo });
+    const openEdit = (role) => {
+        setEditingId(role.idRol);
+        setForm({ nombreRol: role.nombreRol, descripcion: role.descripcion, activo: role.activo });
         setShowModal(true);
     };
 
-    const handleDelete = (area) => {
+    const handleDelete = (role) => {
         Swal.fire({
-            title: '¿Eliminar área?',
-            text: `Se eliminará "${area.nombreArea}". Esta acción no se puede deshacer.`,
+            title: '¿Eliminar rol?',
+            text: `Se eliminará "${role.nombreRol}". Esta acción no se puede deshacer.`,
             icon: 'warning',
             showCancelButton: true,
             confirmButtonColor: '#ef4444',
@@ -47,16 +47,16 @@ export default function AreasPage() {
         }).then(async (result) => {
             if (result.isConfirmed) {
                 try {
-                    await deleteArea(area.idArea);
+                    await deleteRol(role.idRol);
                     Swal.fire({
                         icon: 'success',
                         title: '¡Eliminada!',
-                        text: 'El área ha sido eliminada correctamente.',
+                        text: 'El rol ha sido eliminado correctamente.',
                         timer: 1500,
                         showConfirmButton: false,
                     });
                 } catch (error) {
-                    Swal.fire('Error', 'No se pudo eliminar el área.', 'error');
+                    Swal.fire('Error', 'No se pudo eliminar el rol.', 'error');
                 }
             }
         });
@@ -65,7 +65,7 @@ export default function AreasPage() {
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        if (!form.nombreArea.trim() || !form.cencos.trim()) {
+        if (!form.nombreRol.trim() || !form.descripcion.trim()) {
             Swal.fire({
                 icon: 'warning',
                 title: 'Campos requeridos',
@@ -77,20 +77,20 @@ export default function AreasPage() {
 
         try {
             if (editingId) {
-                await updateArea(editingId, form);
+                await updateRol(editingId, form);
                 Swal.fire({
                     icon: 'success',
                     title: '¡Actualizada!',
-                    text: 'El área ha sido actualizada correctamente.',
+                    text: 'El rol ha sido actualizado correctamente.',
                     timer: 1500,
                     showConfirmButton: false,
                 });
             } else {
-                await createArea(form);
+                await createRol(form);
                 Swal.fire({
                     icon: 'success',
                     title: '¡Registrada!',
-                    text: 'El área ha sido registrada correctamente.',
+                    text: 'El rol ha sido registrado correctamente.',
                     timer: 1500,
                     showConfirmButton: false,
                 });
@@ -111,16 +111,16 @@ export default function AreasPage() {
                 <div>
                     <h1 className="text-2xl md:text-3xl font-bold text-gray-800 flex items-center gap-3">
                         <Building2 className="w-8 h-8 text-primary" />
-                        Áreas
+                        Roles
                     </h1>
-                    <p className="text-gray-500 mt-1">Administra las áreas de la empresa</p>
+                    <p className="text-gray-500 mt-1">Administra los roles de la empresa</p>
                 </div>
                 <button
                     onClick={openAdd}
                     className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary-dark text-white rounded-xl font-medium shadow-lg shadow-primary/25 hover:shadow-primary/40 transition-all duration-300 cursor-pointer"
                 >
                     <Plus className="w-5 h-5" />
-                    Agregar Área
+                    Agregar Rol
                 </button>
             </div>
 
@@ -143,8 +143,8 @@ export default function AreasPage() {
                         <thead>
                             <tr className="border-b border-gray-100">
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">ID</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Centro de Costo</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Nombre del Área</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Nombre del Rol</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Descripción</th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Estado</th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Acciones</th>
                             </tr>
@@ -153,45 +153,45 @@ export default function AreasPage() {
                             {filtered.length === 0 ? (
                                 <tr>
                                     <td colSpan="4" className="px-6 py-12 text-center text-gray-400">
-                                        No se encontraron áreas
+                                        No se encontraron roles
                                     </td>
                                 </tr>
                             ) : (
-                                filtered.map((area) => (
-                                    <tr key={area.idArea} className="hover:bg-gray-50/50 transition-colors">
-                                        <td className="px-6 py-4 text-sm text-gray-500 font-mono">{area.idArea}</td>
+                                filtered.map((role) => (
+                                    <tr key={role.idRol} className="hover:bg-gray-50/50 transition-colors">
+                                        <td className="px-6 py-4 text-sm text-gray-500 font-mono">{role.idRol}</td>
                                         <td className="px-6 py-4">
                                             <div className="flex items-center gap-3">
                                                 <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center">
-                                                    <Building2 className="w-4 h-4 text-primary" />
+                                                    <ShieldUser className="w-4 h-4 text-primary" />
                                                 </div>
-                                                <p className="font-medium text-gray-800">{area.cencos}</p>
+                                                <p className="font-medium text-gray-800">{role.nombreRol}</p>
                                             </div>
                                         </td>
                                         <td className="px-6 py-4">
                                             <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
-                                                {area.nombreArea}
+                                                {role.descripcion}
                                             </span>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${area.activo
+                                            <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${role.activo
                                                 ? 'bg-green-100 text-green-800'
                                                 : 'bg-red-100 text-red-800'
                                                 }`}>
-                                                {area.activo ? 'Activo' : 'Inactivo'}
+                                                {role.activo ? 'Activo' : 'Inactivo'}
                                             </span>
                                         </td>
                                         <td className="px-6 py-4">
                                             <div className="flex items-center justify-end gap-1">
                                                 <button
-                                                    onClick={() => openEdit(area)}
+                                                    onClick={() => openEdit(role)}
                                                     className="p-2 rounded-lg hover:bg-blue-50 text-gray-400 hover:text-blue-600 transition-colors cursor-pointer"
                                                     title="Editar"
                                                 >
                                                     <Pencil className="w-4 h-4" />
                                                 </button>
                                                 <button
-                                                    onClick={() => handleDelete(area)}
+                                                    onClick={() => handleDelete(role)}
                                                     className="p-2 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-600 transition-colors cursor-pointer"
                                                     title="Eliminar"
                                                 >
@@ -206,7 +206,7 @@ export default function AreasPage() {
                     </table>
                 </div>
                 <div className="px-6 py-3 bg-gray-50/50 border-t border-gray-100 text-sm text-gray-500">
-                    {filtered.length} área{filtered.length !== 1 ? 's' : ''} encontrada{filtered.length !== 1 ? 's' : ''}
+                    {filtered.length} rol{filtered.length !== 1 ? 'es' : ''} encontrado{filtered.length !== 1 ? 's' : ''}
                 </div>
             </div>
 
@@ -217,7 +217,7 @@ export default function AreasPage() {
                     <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 md:p-8">
                         <div className="flex items-center justify-between mb-6">
                             <h3 className="text-xl font-semibold text-gray-800">
-                                {editingId ? 'Editar Área' : 'Agregar Área'}
+                                {editingId ? 'Editar Rol' : 'Agregar Rol'}
                             </h3>
                             <button
                                 onClick={() => setShowModal(false)}
@@ -229,24 +229,24 @@ export default function AreasPage() {
 
                         <form onSubmit={handleSubmit} className="space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1.5">Centro de Costo</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1.5">Nombre del Rol</label>
                                 <input
                                     type="text"
-                                    value={form.cencos}
-                                    onChange={(e) => setForm({ ...form, cencos: e.target.value })}
-                                    placeholder="Ej: CC-001"
+                                    value={form.nombreRol}
+                                    onChange={(e) => setForm({ ...form, nombreRol: e.target.value })}
+                                    placeholder="Ej: Administrador"
                                     className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
                                     required
                                 />
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1.5">Nombre del Área</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1.5">Descripción</label>
                                 <input
                                     type="text"
-                                    value={form.nombreArea}
-                                    onChange={(e) => setForm({ ...form, nombreArea: e.target.value })}
-                                    placeholder="Ej: Producción"
+                                    value={form.descripcion}
+                                    onChange={(e) => setForm({ ...form, descripcion: e.target.value })}
+                                    placeholder="Ej: Descripción del rol"
                                     className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
                                     required
                                 />

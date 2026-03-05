@@ -12,11 +12,17 @@ const api = axios.create({
 // Interceptor de request — adjunta token automáticamente
 api.interceptors.request.use(
     (config) => {
-        const stored = localStorage.getItem('agrofood_user');
-        if (stored) {
-            const user = JSON.parse(stored);
-            if (user.token) {
-                config.headers.Authorization = `Bearer ${user.token}`;
+        // En Zustand con persist, el store se guarda por defecto en un objeto JSON bajo la key de persistence
+        const storedAuth = localStorage.getItem('agrofood_auth');
+        if (storedAuth) {
+            try {
+                const parsed = JSON.parse(storedAuth);
+                const user = parsed.state?.user;
+                if (user && user.token) {
+                    config.headers.Authorization = `Bearer ${user.token}`;
+                }
+            } catch (err) {
+                console.error("Error parsing auth state from local storage", err);
             }
         }
         return config;

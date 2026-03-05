@@ -143,6 +143,7 @@ function EmpleadoDashboard({ user }) {
 export default function DashboardPage() {
     const { user } = useAuth();
 
+    // El objeto user en el store ahora tiene el nombre real y el rol del backend
     if (user?.role === 'ADMIN') {
         return <AdminDashboard user={user} />;
     }

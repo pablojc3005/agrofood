@@ -11,13 +11,20 @@ import {
     BarChart3,
     CalendarCheck,
     History,
+    UserRoundKey,
+    ShieldUser,
+    Tags, // Added Tags icon
 } from 'lucide-react';
 
 const adminMenu = [
     { to: '/', label: 'Dashboard', icon: LayoutDashboard },
+    { to: '/roles', label: 'Roles', icon: ShieldUser },
+    { to: '/usuarios', label: 'Usuarios', icon: UserRoundKey },
     { to: '/areas', label: 'Áreas', icon: Building2 },
     { to: '/trabajadores', label: 'Trabajadores', icon: Users },
+    { to: '/categorias', label: 'Categorías Menú', icon: Tags }, // Added Categorías Menú link
     { to: '/platos', label: 'Platos / Menú', icon: UtensilsCrossed },
+    { to: '/configurar-menu', label: 'Gestión Menú Diario', icon: CalendarCheck },
     { to: '/reportes', label: 'Reportes de Consumo', icon: BarChart3 },
 ];
 
@@ -76,11 +83,15 @@ export default function Sidebar({ isOpen, onClose }) {
                 <div className="px-6 py-4 border-b border-white/10">
                     <div className="flex items-center gap-3">
                         <div className="w-9 h-9 rounded-full bg-primary-light/20 flex items-center justify-center text-primary-light font-bold text-sm">
-                            {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+                            {(user?.nombresTrabajador || user?.username || 'U').charAt(0).toUpperCase()}
                         </div>
                         <div className="overflow-hidden flex-1">
-                            <p className="text-sm font-medium truncate">{user?.name || 'Usuario'}</p>
-                            <p className="text-xs text-gray-400 truncate">{user?.email || ''}</p>
+                            <p className="text-sm font-medium truncate">
+                                {user?.nombresTrabajador
+                                    ? `${user.nombresTrabajador} ${user.apellidosTrabajador || ''}`
+                                    : user?.username || 'Usuario'}
+                            </p>
+                            <p className="text-xs text-gray-400 truncate">{user?.email || (user?.emailTrabajador || '')}</p>
                         </div>
                     </div>
                     <span className={`inline-block mt-2 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${roleBadge.color}`}>

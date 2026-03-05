@@ -1,30 +1,31 @@
 import { useState, useEffect } from 'react';
-import { Plus, Pencil, Trash2, X, Search, Users, RefreshCcw, Save } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, Search, Users, RefreshCcw, Save, Mail } from 'lucide-react';
 import Swal from 'sweetalert2';
+import { useUsuarioStore } from '../store/useUsuarioStore';
+import { useRolStore } from '../store/useRolStore';
 import { useTrabajadorStore } from '../store/useTrabajadorStore';
-import { useAreaStore } from '../store/useAreaStore';
 
-const emptyForm = { codigo: '', nombres: '', apellidos: '', sexo: 'M', telefono: '', area: { idArea: '' }, activo: true };
+const emptyForm = { username: '', email: '', password: '', confirmPassword: '', trabajador: { idTrabajador: '' }, rol: { idRol: '' }, activo: true, idTrabajador: '', idRol: '' };
 
-export default function TrabajadoresPage() {
-    const { trabajadores, fetchTrabajadores, createTrabajador, updateTrabajador, deleteTrabajador, loading } = useTrabajadorStore();
-    const { areas, fetchAreas } = useAreaStore();
+export default function UsuariosPage() {
+    const { usuarios, fetchUsuarios, createUsuario, updateUsuario, deleteUsuario, loading } = useUsuarioStore();
+    const { roles, fetchRoles } = useRolStore();
+    const { trabajadores, fetchTrabajadores } = useTrabajadorStore();
     const [search, setSearch] = useState('');
     const [showModal, setShowModal] = useState(false);
     const [editingId, setEditingId] = useState(null);
     const [form, setForm] = useState(emptyForm);
 
     useEffect(() => {
+        fetchUsuarios();
         fetchTrabajadores();
-        fetchAreas();
-    }, [fetchTrabajadores, fetchAreas]);
+        fetchRoles();
+    }, [fetchUsuarios, fetchTrabajadores, fetchRoles]);
 
-    const filtered = trabajadores.filter(
+    const filtered = usuarios.filter(
         (t) =>
-            t.codigo?.toLowerCase().includes(search.toLowerCase()) ||
-            t.nombres?.toLowerCase().includes(search.toLowerCase()) ||
-            t.apellidos?.toLowerCase().includes(search.toLowerCase()) ||
-            t.nombreArea?.toLowerCase().includes(search.toLowerCase())
+            t.username?.toLowerCase().includes(search.toLowerCase()) ||
+            t.email?.toLowerCase().includes(search.toLowerCase())
     );
 
     const openAdd = () => {
@@ -33,24 +34,24 @@ export default function TrabajadoresPage() {
         setShowModal(true);
     };
 
-    const openEdit = (trab) => {
-        setEditingId(trab.idTrabajador);
+    const openEdit = (usu) => {
+        setEditingId(usu.idUsuario);
         setForm({
-            codigo: trab.codigo,
-            nombres: trab.nombres,
-            apellidos: trab.apellidos,
-            sexo: trab.sexo,
-            telefono: trab.telefono,
-            area: { idArea: trab.idArea?.toString() || '' },
-            activo: trab.activo,
+            username: usu.username,
+            email: usu.email,
+            idTrabajador: usu.idTrabajador?.toString() || '',
+            idRol: usu.idRol?.toString() || '',
+            password: '',
+            confirmPassword: '',
+            activo: usu.activo,
         });
         setShowModal(true);
     };
 
-    const handleDelete = (trab) => {
+    const handleDelete = (usu) => {
         Swal.fire({
-            title: '¿Eliminar trabajador?',
-            text: `Se eliminará a "${trab.nombres} ${trab.apellidos}". Esta acción no se puede deshacer.`,
+            title: '¿Eliminar usuario?',
+            text: `Se eliminará al usuario "${usu.username}". Esta acción no se puede deshacer.`,
             icon: 'warning',
             showCancelButton: true,
             confirmButtonColor: '#ef4444',
@@ -60,16 +61,16 @@ export default function TrabajadoresPage() {
         }).then(async (result) => {
             if (result.isConfirmed) {
                 try {
-                    await deleteTrabajador(trab.idTrabajador);
+                    await deleteUsuario(usu.idUsuario);
                     Swal.fire({
                         icon: 'success',
                         title: '¡Eliminado!',
-                        text: 'El trabajador ha sido eliminado correctamente.',
+                        text: 'El usuario ha sido eliminado correctamente.',
                         timer: 1500,
                         showConfirmButton: false,
                     });
                 } catch (error) {
-                    Swal.fire('Error', 'No se pudo eliminar el trabajador.', 'error');
+                    Swal.fire('Error', 'No se pudo eliminar el usuario.', 'error');
                 }
             }
         });
@@ -78,47 +79,70 @@ export default function TrabajadoresPage() {
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        if (!form.codigo.trim() || !form.nombres.trim() || !form.apellidos.trim() || !form.telefono.trim() || !form.area.idArea) {
+        if (!form.username.trim() || !form.email.trim() || !form.idTrabajador.trim() || !form.idRol.trim()) {
             Swal.fire({
                 icon: 'warning',
                 title: 'Campos requeridos',
-                text: 'Por favor completa todos los campos obligatorios',
+                text: 'Por favor completa todos los campos obligatorios (*)',
+                confirmButtonColor: '#16a34a',
+            });
+            return;
+        }
+
+        if (!editingId && (!form.password || form.password.length < 6)) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Contraseña requerida',
+                text: 'La contraseña debe tener al menos 6 caracteres',
+                confirmButtonColor: '#16a34a',
+            });
+            return;
+        }
+
+        if (!editingId && form.password !== form.confirmPassword) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: 'Las contraseñas no coinciden',
                 confirmButtonColor: '#16a34a',
             });
             return;
         }
 
         // Enviar los Datos que espera recibir el backend
-        const trabajadorData = {
-            codigo: form.codigo,
-            nombres: form.nombres,
-            apellidos: form.apellidos,
-            sexo: form.sexo,
-            telefono: form.telefono,
-            idArea: Number(form.area.idArea),
+        const usuarioData = {
+            username: form.username,
+            password: form.password,
+            email: form.email,
+            idTrabajador: Number(form.idTrabajador),
+            idRol: Number(form.idRol),
             activo: form.activo !== undefined ? form.activo : true
         };
 
+        if (!editingId) {
+            usuarioData.password = form.password;
+        }
+
         if (form.email) {
-            trabajadorData.email = form.email;
+            usuarioData.email = form.email;
         }
 
         try {
             if (editingId) {
-                await updateTrabajador(editingId, trabajadorData);
+                await updateUsuario(editingId, usuarioData);
                 Swal.fire({
                     icon: 'success',
                     title: '¡Actualizado!',
-                    text: 'El trabajador ha sido actualizado correctamente.',
+                    text: 'El usuario ha sido actualizado correctamente.',
                     timer: 1500,
                     showConfirmButton: false,
                 });
             } else {
-                await createTrabajador(trabajadorData);
+                await createUsuario(usuarioData);
                 Swal.fire({
                     icon: 'success',
                     title: '¡Registrado!',
-                    text: 'El trabajador ha sido registrado correctamente.',
+                    text: 'El usuario ha sido registrado correctamente.',
                     timer: 1500,
                     showConfirmButton: false,
                 });
@@ -139,7 +163,7 @@ export default function TrabajadoresPage() {
                 <div>
                     <h1 className="text-2xl md:text-3xl font-bold text-gray-800 flex items-center gap-3">
                         <Users className="w-8 h-8 text-primary" />
-                        Trabajadores
+                        Usuarios
                     </h1>
                     <p className="text-gray-500 mt-1">Administra el personal de la empresa</p>
                 </div>
@@ -148,7 +172,7 @@ export default function TrabajadoresPage() {
                     className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary-dark text-white rounded-xl font-medium shadow-lg shadow-primary/25 hover:shadow-primary/40 transition-all duration-300 cursor-pointer"
                 >
                     <Plus className="w-5 h-5" />
-                    Agregar Trabajador
+                    Agregar usuario
                 </button>
             </div>
 
@@ -170,12 +194,10 @@ export default function TrabajadoresPage() {
                     <table className="w-full text-left">
                         <thead>
                             <tr className="border-b border-gray-100">
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Código</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Nombres</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Apellidos</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden md:table-cell">Sexo</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden lg:table-cell">Celular</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Área</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Usuario</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Trabajador</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden md:table-cell">Email</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden lg:table-cell">Rol</th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Estado</th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Acciones</th>
                             </tr>
@@ -184,48 +206,35 @@ export default function TrabajadoresPage() {
                             {filtered.length === 0 ? (
                                 <tr>
                                     <td colSpan="7" className="px-6 py-12 text-center text-gray-400">
-                                        No se encontraron trabajadores
+                                        No se encontraron usuarios
                                     </td>
                                 </tr>
                             ) : (
-                                filtered.map((trab) => (
-                                    <tr key={trab.idTrabajador} className="hover:bg-gray-50/50 transition-colors">
-                                        <td className="px-6 py-4 font-medium text-gray-800">{trab.codigo}</td>
-                                        <td className="px-6 py-4 text-gray-700">{trab.nombres}</td>
-                                        <td className="px-6 py-4 text-gray-700">{trab.apellidos}</td>
-                                        <td className="px-6 py-4 hidden md:table-cell">
-                                            <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${trab.sexo === 'M'
-                                                ? 'bg-blue-50 text-blue-700'
-                                                : 'bg-pink-50 text-pink-700'
-                                                }`}>
-                                                {trab.sexo === 'M' ? 'Masculino' : 'Femenino'}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 text-sm text-gray-600 hidden lg:table-cell">{trab.telefono}</td>
+                                filtered.map((usu) => (
+                                    <tr key={usu.idusuario} className="hover:bg-gray-50/50 transition-colors">
+                                        <td className="px-6 py-4 font-medium text-gray-800">{usu.username}</td>
+                                        <td className="px-6 py-4 text-gray-700">{usu.nombresTrabajador + ', ' + usu.apellidosTrabajador}</td>
+                                        <td className="px-6 py-4 text-gray-700">{usu.email}</td>
+                                        <td className="px-6 py-4 text-gray-700">{usu.nombreRol}</td>
                                         <td className="px-6 py-4">
-                                            <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-medium bg-green-50 text-green-700">
-                                                {trab.nombreArea}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${trab.activo
+                                            <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${usu.activo
                                                 ? 'bg-green-100 text-green-800'
                                                 : 'bg-red-100 text-red-800'
                                                 }`}>
-                                                {trab.activo ? 'Activo' : 'Inactivo'}
+                                                {usu.activo ? 'Activo' : 'Inactivo'}
                                             </span>
                                         </td>
                                         <td className="px-6 py-4">
                                             <div className="flex items-center justify-end gap-1">
                                                 <button
-                                                    onClick={() => openEdit(trab)}
+                                                    onClick={() => openEdit(usu)}
                                                     className="p-2 rounded-lg hover:bg-blue-50 text-gray-400 hover:text-blue-600 transition-colors cursor-pointer"
                                                     title="Editar"
                                                 >
                                                     <Pencil className="w-4 h-4" />
                                                 </button>
                                                 <button
-                                                    onClick={() => handleDelete(trab)}
+                                                    onClick={() => handleDelete(usu)}
                                                     className="p-2 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-600 transition-colors cursor-pointer"
                                                     title="Eliminar"
                                                 >
@@ -240,7 +249,7 @@ export default function TrabajadoresPage() {
                     </table>
                 </div>
                 <div className="px-6 py-3 bg-gray-50/50 border-t border-gray-100 text-sm text-gray-500">
-                    {filtered.length} trabajador{filtered.length !== 1 ? 'es' : ''} encontrado{filtered.length !== 1 ? 's' : ''}
+                    {filtered.length} usuajador{filtered.length !== 1 ? 'es' : ''} encontrado{filtered.length !== 1 ? 's' : ''}
                 </div>
             </div>
 
@@ -251,7 +260,7 @@ export default function TrabajadoresPage() {
                     <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 md:p-8 max-h-[90vh] overflow-y-auto">
                         <div className="flex items-center justify-between mb-6">
                             <h3 className="text-xl font-semibold text-gray-800">
-                                {editingId ? 'Editar Trabajador' : 'Agregar Trabajador'}
+                                {editingId ? 'Editar Usuario' : 'Agregar Usuario'}
                             </h3>
                             <button
                                 onClick={() => setShowModal(false)}
@@ -263,106 +272,118 @@ export default function TrabajadoresPage() {
 
                         <form onSubmit={handleSubmit} className="space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1.5">Código de Trabajador</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1.5">Usuario</label>
                                 <input
                                     type="text"
-                                    value={form.codigo}
-                                    onChange={(e) => setForm({ ...form, codigo: e.target.value })}
+                                    value={form.username}
+                                    onChange={(e) => setForm({ ...form, username: e.target.value })}
                                     placeholder="Ej: TRB-006"
                                     className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
                                     required
                                 />
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Nombres</label>
-                                    <input
-                                        type="text"
-                                        value={form.nombres}
-                                        onChange={(e) => setForm({ ...form, nombres: e.target.value })}
-                                        placeholder="Ej: Juan Carlos"
-                                        className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
-                                        required
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Apellidos</label>
-                                    <input
-                                        type="text"
-                                        value={form.apellidos}
-                                        onChange={(e) => setForm({ ...form, apellidos: e.target.value })}
-                                        placeholder="Ej: García López"
-                                        className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
-                                        required
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Sexo</label>
-                                    <select
-                                        value={form.sexo}
-                                        onChange={(e) => setForm({ ...form, sexo: e.target.value })}
-                                        className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
-                                    >
-                                        <option value="M">Masculino</option>
-                                        <option value="F">Femenino</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Nro. Celular</label>
-                                    <input
-                                        type="tel"
-                                        value={form.telefono}
-                                        onChange={(e) => setForm({ ...form, telefono: e.target.value })}
-                                        placeholder="Ej: 987654321"
-                                        maxLength={9}
-                                        className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
-                                        required
-                                    />
-                                </div>
-                            </div>
-
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1.5">Área</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1.5">Trabajador *</label>
                                 <select
-                                    value={form.area.idArea}
-                                    onChange={(e) => setForm({ ...form, area: { idArea: e.target.value } })}
+                                    value={form.idTrabajador}
+                                    onChange={(e) => setForm({ ...form, idTrabajador: e.target.value })}
                                     className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
                                     required
                                 >
-                                    <option value="">Seleccionar área...</option>
-                                    {areas.map((area) => (
-                                        <option key={area.idArea} value={area.idArea}>
-                                            {area.nombreArea}
+                                    <option value="">Seleccionar Trabajador...</option>
+                                    {trabajadores.map((trabajador) => (
+                                        <option key={trabajador.idTrabajador} value={trabajador.idTrabajador}>
+                                            {trabajador.nombres} {trabajador.apellidos}
                                         </option>
                                     ))}
                                 </select>
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1.5">Estado</label>
-                                <button type="button"
-                                    onClick={() => setForm({ ...form, activo: !form.activo })}
-                                    className={`
-                                        relative inline-flex h-6 w-11 items-center rounded-full
-                                        transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
-                                        ${form.activo ? 'bg-green-600' : 'bg-gray-200'}
-                                    `}
-                                >
-                                    <span
-                                        className={`
-                                        inline-block h-4 w-4 transform rounded-full bg-white transition-transform
-                                        ${form.activo ? 'translate-x-6' : 'translate-x-1'}
-                                        `}
-                                    />
-                                </button>
-                                <span className="ml-3 text-sm text-gray-700">
-                                    {form.activo ? 'Activo' : 'Inactivo'}
-                                </span>
+                                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                                    Correo electrónico
+                                </label>
+                                <input
+                                    type="email"
+                                    name="email"
+                                    value={form.email}
+                                    onChange={(e) => setForm({ ...form, email: e.target.value })}
+                                    placeholder="correo@ejemplo.com"
+                                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+                                    required
+                                />
                             </div>
+
+                            {/*!editingId && (*/}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Contraseña *</label>
+                                    <input
+                                        type="password"
+                                        value={form.password}
+                                        onChange={(e) => setForm({ ...form, password: e.target.value })}
+                                        placeholder="Mínimo 6 caracteres"
+                                        className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+                                        required
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Confirmar Contraseña *</label>
+                                    <input
+                                        type="password"
+                                        value={form.confirmPassword}
+                                        onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
+                                        placeholder="Repite la contraseña"
+                                        className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+                                        required
+                                    />
+                                </div>
+                            </div>
+                            {/*)*/}
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div >
+                                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Rol</label>
+                                    <select
+                                        value={form.idRol}
+                                        onChange={(e) => setForm({ ...form, idRol: e.target.value })}
+                                        className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+                                        required
+                                    >
+                                        <option value="">Seleccionar Rol...</option>
+                                        {roles.map((rol) => (
+                                            <option key={rol.idRol} value={rol.idRol}>
+                                                {rol.nombreRol}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Estado</label>
+                                    <button type="button"
+                                        onClick={() => setForm({ ...form, activo: !form.activo })}
+                                        className={`
+                                            relative inline-flex h-6 w-11 items-center rounded-full
+                                            transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
+                                            ${form.activo ? 'bg-green-600' : 'bg-gray-200'}
+                                        `}
+                                    >
+                                        <span
+                                            className={`
+                                            inline-block h-4 w-4 transform rounded-full bg-white transition-transform
+                                            ${form.activo ? 'translate-x-6' : 'translate-x-1'}
+                                            `}
+                                        />
+                                    </button>
+                                    <span className="ml-3 text-sm text-gray-700">
+                                        {form.activo ? 'Activo' : 'Inactivo'}
+                                    </span>
+                                </div>
+                            </div>
+
+
 
                             <div className="flex items-center gap-3 pt-2">
                                 <button

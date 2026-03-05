@@ -8,7 +8,7 @@ export default function LoginPage() {
     const { login } = useAuth();
     const navigate = useNavigate();
 
-    const [form, setForm] = useState({ email: '', password: '' });
+    const [form, setForm] = useState({ username: '', password: '' });
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
 
@@ -19,7 +19,7 @@ export default function LoginPage() {
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        if (!form.email || !form.password) {
+        if (!form.username || !form.password) {
             Swal.fire({
                 icon: 'warning',
                 title: 'Campos incompletos',
@@ -31,7 +31,7 @@ export default function LoginPage() {
 
         try {
             setLoading(true);
-            const user = await login(form.email, form.password);
+            const user = await login(form.username, form.password);
 
             const Toast = Swal.mixin({
                 toast: true,
@@ -42,7 +42,7 @@ export default function LoginPage() {
             });
             Toast.fire({
                 icon: 'success',
-                title: `¡Bienvenido, ${user.name}!`,
+                title: `¡Bienvenido, ${user.name || user.username}!`,
             });
 
             navigate('/');
@@ -86,14 +86,14 @@ export default function LoginPage() {
                     <form onSubmit={handleSubmit} className="space-y-5">
                         <div>
                             <label className="block text-sm font-medium text-green-100 mb-1.5">
-                                Correo electrónico
+                                Nombre de usuario
                             </label>
                             <input
-                                type="email"
-                                name="email"
-                                value={form.email}
+                                type="text"
+                                name="username"
+                                value={form.username}
                                 onChange={handleChange}
-                                placeholder="correo@ejemplo.com"
+                                placeholder="Ej: PCORZO"
                                 className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                             />
                         </div>
@@ -144,7 +144,7 @@ export default function LoginPage() {
                         </button>
                     </form>
 
-                    <p className="mt-6 text-center text-sm text-green-200/60">
+                    {/* <p className="mt-6 text-center text-sm text-green-200/60">
                         ¿No tienes cuenta?{' '}
                         <Link
                             to="/register"
@@ -152,7 +152,7 @@ export default function LoginPage() {
                         >
                             Regístrate
                         </Link>
-                    </p>
+                    </p> */}
                 </div>
             </div>
         </div>

@@ -1,311 +1,342 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
     CalendarCheck, Check, Clock, Users, UserPlus,
     Trash2, AlertCircle, Utensils, ChevronRight,
-    CheckCircle2
+    CheckCircle2,
+    ArrowRight
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { useAuth } from '../hooks/useAuth';
+import { useMenuDiarioStore } from '../store/useMenuDiarioStore';
+import { usePedidoStore } from '../store/usePedidoStore';
 
-// Datos de ejemplo para hoy (simulando lo que el admin publicó)
-const MENU_HOY = {
-    fecha: new Date().toISOString().split('T')[0],
-    horaLimite: '16:00',
-    esMenuUnico: false,
-    entradas: ['Sopa de res', 'Tequeños'],
-    segundos: ['Pollo al huacatay', 'Olluquito', 'Dieta pollo al pimiento']
-};
+// Eliminamos MENU_HOY hardcodeado
+const HORA_POR_DEFECTO = '10:00';
 
 export default function SeleccionMenuPage() {
     const { user } = useAuth();
+    const { menus, fetchMenus, loading: loadingMenus } = useMenuDiarioStore();
+    const { createPedidoCompleto, loading: loadingPedido } = usePedidoStore();
     const isAdmin = user?.role === 'ADMIN';
 
-    // Estados principales
     const [miEntrada, setMiEntrada] = useState('');
     const [miSegundo, setMiSegundo] = useState('');
-    const [visitas, setVisitas] = useState([]); // [{ id, nombre, entrada, segundo }]
+    const [visitas, setVisitas] = useState([]);
     const [confirmado, setConfirmado] = useState(false);
-
-    // Estado de tiempo
     const [tiempoAgotado, setTiempoAgotado] = useState(false);
-    const [horaActual, setHoraActual] = useState(new Date());
 
-    // Verificar tiempo cada minuto
+    // Obtener fecha local actual YYYY-MM-DD
+    const getLocalDateStr = () => {
+        const d = new Date();
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
+
+    const fechaHoyStr = useMemo(() => getLocalDateStr(), []);
+
     useEffect(() => {
-        const timer = setInterval(() => {
-            const now = new Date();
-            setHoraActual(now);
+        fetchMenus();
+    }, [fetchMenus]);
 
-            const [limiteH, limiteM] = MENU_HOY.horaLimite.split(':').map(Number);
-            const limite = new Date();
-            limite.setHours(limiteH, limiteM, 0, 0);
+    // Filtrar menús usando las propiedades del DTO plano (nombrePlato, nombreCategoria)
+    const menuHoyList = useMemo(() =>
+        menus.filter(m => m.fechaMenu === fechaHoyStr && m.activo),
+        [menus, fechaHoyStr]);
 
-            if (now > limite && !isAdmin) {
-                setTiempoAgotado(true);
-            }
-        }, 1000);
+    const entradas = useMemo(() =>
+        menuHoyList.filter(m =>
+            m.nombreCategoria?.toLowerCase().includes('entrada') ||
+            m.nombreCategoria?.toLowerCase().includes('sopa')
+        ), [menuHoyList]);
 
-        // Ejecución inicial
-        const [limiteH, limiteM] = MENU_HOY.horaLimite.split(':').map(Number);
+    const segundos = useMemo(() =>
+        menuHoyList.filter(m =>
+            m.nombreCategoria?.toLowerCase().includes('segundo') ||
+            m.nombreCategoria?.toLowerCase().includes('fondo')
+        ), [menuHoyList]);
+
+    const horaLimiteOriginal = useMemo(() =>
+        menuHoyList.length > 0 ? menuHoyList[0].horaLimite : '10:00:00',
+        [menuHoyList]);
+
+    // Formatear hora de 24h a 12h para mostrarla (Ej: 15:00 -> 3:00 PM)
+    const formatTime12h = (time24) => {
+        if (!time24) return '--:--';
+        const [h, m] = time24.split(':');
+        const hh = parseInt(h);
+        const ampm = hh >= 12 ? 'PM' : 'AM';
+        const h12 = hh % 12 || 12;
+        return `${h12}:${m} ${ampm}`;
+    };
+
+    const checkTimeLimit = useCallback(() => {
+        if (!horaLimiteOriginal || isAdmin) return;
+
+        const now = new Date();
+        const [h, m, s] = horaLimiteOriginal.split(':').map(Number);
+
         const limite = new Date();
-        limite.setHours(limiteH, limiteM, 0, 0);
-        if (new Date() > limite && !isAdmin) setTiempoAgotado(true);
+        limite.setHours(h, m, s || 0, 0);
 
+        if (now > limite) {
+            setTiempoAgotado(true);
+        } else {
+            setTiempoAgotado(false);
+        }
+    }, [horaLimiteOriginal, isAdmin]);
+
+    useEffect(() => {
+        checkTimeLimit();
+        const timer = setInterval(checkTimeLimit, 30000); // Check every 30s
         return () => clearInterval(timer);
-    }, [isAdmin]);
+    }, [checkTimeLimit]);
 
     const addVisita = () => {
         setVisitas([...visitas, {
             id: Date.now(),
             nombre: '',
-            entrada: MENU_HOY.entradas[0] || '',
-            segundo: MENU_HOY.segundos[0] || ''
+            entrada: entradas[0]?.idMenuDiario || '',
+            segundo: segundos[0]?.idMenuDiario || ''
         }]);
     };
 
-    const removeVisita = (id) => {
-        setVisitas(visitas.filter(v => v.id !== id));
-    };
-
+    const removeVisita = (id) => setVisitas(visitas.filter(v => v.id !== id));
     const updateVisita = (id, field, value) => {
         setVisitas(visitas.map(v => v.id === id ? { ...v, [field]: value } : v));
     };
 
-    const handleConfirmar = () => {
-        if (!miEntrada || !miSegundo) {
+    const handleConfirmar = async () => {
+        if (!miSegundo) {
             Swal.fire({
                 icon: 'warning',
                 title: 'Selección incompleta',
-                text: 'Debes elegir una entrada y un segundo para ti.',
+                text: 'Debes elegir al menos un segundo/fondo para ti.',
                 confirmButtonColor: '#16a34a',
             });
             return;
         }
 
+        const menuEntrada = miEntrada ? menuHoyList.find(m => m.idMenuDiario === Number(miEntrada)) : null;
+        const menuSegundo = menuHoyList.find(m => m.idMenuDiario === Number(miSegundo));
         const totalRaciones = 1 + visitas.length;
 
-        Swal.fire({
+        const result = await Swal.fire({
             title: '¿Confirmar pedido?',
             html: `
-                <div class="text-sm text-left space-y-2">
-                    <p><strong>Para ti:</strong> ${miEntrada} + ${miSegundo}</p>
+                <div class="text-sm text-left p-2 bg-gray-50 rounded-xl space-y-2">
+                    <p className="font-bold border-b pb-1">Para ti:</p>
+                    <p className="pl-2">${menuEntrada ? '• ' + menuEntrada.nombrePlato + '<br/>' : ''}• ${menuSegundo?.nombrePlato}</p>
                     ${visitas.length > 0 ? `
-                        <p className="border-t pt-2"><strong>Visitas (${visitas.length}):</strong></p>
-                        <ul class="list-disc pl-5">
-                            ${visitas.map(v => `<li>${v.nombre || 'Invitado'}: ${v.entrada} + ${v.segundo}</li>`).join('')}
+                        <p className="font-bold border-b pb-1 pt-2">Visitas (${visitas.length}):</p>
+                        <ul class="pl-2 space-y-1">
+                            ${visitas.map(v => {
+                const ve = v.entrada ? menuHoyList.find(m => m.idMenuDiario === Number(v.entrada)) : null;
+                const vs = menuHoyList.find(m => m.idMenuDiario === Number(v.segundo));
+                return `<li class="text-xs"><strong>${v.nombre || 'Invitado'}:</strong> ${ve ? ve.nombrePlato + ' + ' : ''}${vs?.nombrePlato}</li>`;
+            }).join('')}
                         </ul>
                     ` : ''}
-                    <p class="border-t pt-2 font-bold text-primary">Total raciones: ${totalRaciones}</p>
+                    <div class="pt-2 mt-2 border-t flex justify-between font-black text-primary text-base">
+                        <span>TOTAL RACIONES:</span>
+                        <span>${totalRaciones}</span>
+                    </div>
                 </div>
             `,
             icon: 'question',
             showCancelButton: true,
             confirmButtonColor: '#16a34a',
             cancelButtonColor: '#6b7280',
-            confirmButtonText: 'Sí, confirmar',
-            cancelButtonText: 'Cancelar'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                setConfirmado(true);
-                Swal.fire({
-                    icon: 'success',
-                    title: '¡Pedido registrado!',
-                    text: 'Buen provecho. Tu selección y raciones adicionales han sido guardadas.',
-                    timer: 2500,
-                    showConfirmButton: false,
-                });
-            }
+            confirmButtonText: 'Sí, registrar pedido',
+            cancelButtonText: 'Revisar'
         });
+
+        if (result.isConfirmed) {
+            try {
+                const pedidoRequestDTO = {
+                    idUsuario: user.idUsuario,
+                    idTrabajador: user.idTrabajador || null,
+                    idMenuEntrada: miEntrada ? Number(miEntrada) : null,
+                    idMenuSegundo: Number(miSegundo),
+                    notasGenerales: `Pedido automático generado el ${getLocalDateStr()}`,
+                    visitas: visitas.map(v => ({
+                        nombreVisitante: v.nombre,
+                        idMenuEntrada: v.entrada ? Number(v.entrada) : null,
+                        idMenuSegundo: Number(v.segundo)
+                    }))
+                };
+
+                await createPedidoCompleto(pedidoRequestDTO);
+
+                setConfirmado(true);
+                Swal.fire({ icon: 'success', title: '¡Realizado!', text: 'Tu pedido ha sido registrado exitosamente.', timer: 2000, showConfirmButton: false });
+            } catch (err) {
+                Swal.fire('Error', 'No se pudo sincronizar: ' + err.message, 'error');
+            }
+        }
     };
 
-    const fechaHoy = new Date().toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long' });
+    const fechaHoyNormalizada = new Date().toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long' });
 
     if (confirmado) {
         return (
-            <div className="max-w-2xl mx-auto py-12 text-center space-y-6">
-                <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Check className="w-10 h-10" />
+            <div className="max-w-xl mx-auto py-16 text-center animate-in fade-in zoom-in duration-500">
+                <div className="w-24 h-24 bg-green-500 text-white rounded-3xl shadow-xl shadow-green-200 flex items-center justify-center mx-auto mb-8 rotate-3">
+                    <CheckCircle2 className="w-12 h-12" />
                 </div>
-                <h1 className="text-3xl font-bold text-gray-800">¡Pedido Confirmado!</h1>
-                <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 text-left space-y-4">
+                <h1 className="text-4xl font-black text-gray-900 mb-2">¡Todo listo!</h1>
+                <p className="text-gray-500 font-medium mb-12">Disfruta de tu almuerzo, ya hemos avisado a la cocina.</p>
+                <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100 text-left space-y-6 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-4 opacity-5"><Utensils className="w-20 h-20 rotate-12" /></div>
                     <div>
-                        <p className="text-xs text-gray-500 uppercase tracking-wider font-bold mb-1">Tu Almuerzo</p>
-                        <p className="text-lg font-medium text-gray-800">{miEntrada} <span className="text-gray-400 mx-2">+</span> {miSegundo}</p>
+                        <p className="text-[10px] text-primary font-black uppercase tracking-widest mb-1">Tu Selección</p>
+                        <p className="text-xl font-bold text-gray-800 leading-tight">
+                            {miEntrada && <span>{menuHoyList.find(m => m.idMenuDiario === Number(miEntrada))?.nombrePlato} <br /> <ArrowRight className="inline w-4 h-4 text-gray-300 mx-2" /> </span>}
+                            {menuHoyList.find(m => m.idMenuDiario === Number(miSegundo))?.nombrePlato}
+                        </p>
                     </div>
-                    {visitas.length > 0 && (
-                        <div>
-                            <p className="text-xs text-gray-500 uppercase tracking-wider font-bold mb-2">Raciones para Visitas ({visitas.length})</p>
-                            <div className="space-y-2">
-                                {visitas.map((v, i) => (
-                                    <div key={i} className="p-3 bg-gray-50 rounded-xl text-sm flex justify-between">
-                                        <span className="font-semibold text-gray-700">{v.nombre || 'Invitado'}</span>
-                                        <span className="text-gray-500">{v.entrada} + {v.segundo}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
                 </div>
-                <button
-                    onClick={() => setConfirmado(false)}
-                    className="text-primary font-medium hover:underline cursor-pointer"
-                >
-                    Modificar mi pedido
+                <button onClick={() => setConfirmado(false)} className="mt-12 text-primary font-bold hover:underline">
+                    Realizar otro pedido o cambios
                 </button>
             </div>
         );
     }
 
     return (
-        <div className="max-w-5xl mx-auto space-y-6 pb-20">
-            {/* Header / Banner de Tiempo */}
-            <div className="relative overflow-hidden bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+        <div className="max-w-6xl mx-auto space-y-8 pb-20">
+            {/* Header / Banner Premium */}
+            <div className="relative overflow-hidden bg-white p-8 md:p-10 rounded-[2.5rem] shadow-sm border border-gray-100">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-8 relative z-10">
                     <div>
-                        <p className="text-primary font-bold text-sm uppercase tracking-widest mb-1 flex items-center gap-2">
-                            <Utensils className="w-4 h-4" /> Almuerzo de Hoy
-                        </p>
-                        <h1 className="text-2xl md:text-4xl font-black text-gray-800 capitalize leading-tight">
-                            {fechaHoy}
+                        <div className="flex items-center gap-2 mb-2">
+                            <span className="px-3 py-1 bg-primary/10 text-primary text-[10px] font-black uppercase tracking-widest rounded-full">Almuerzo de Hoy</span>
+                            {tiempoAgotado && !isAdmin && <span className="px-3 py-1 bg-red-100 text-red-600 text-[10px] font-black uppercase tracking-widest rounded-full">Finalizado</span>}
+                        </div>
+                        <h1 className="text-3xl md:text-5xl font-black text-gray-900 capitalize leading-tight">
+                            {fechaHoyNormalizada}
                         </h1>
                     </div>
 
-                    <div className={`p-4 rounded-2xl flex items-center gap-4 transition-colors ${tiempoAgotado ? 'bg-red-50' : 'bg-amber-50'}`}>
-                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 animate-pulse ${tiempoAgotado ? 'bg-red-500 text-white' : 'bg-amber-500 text-white'}`}>
-                            <Clock className="w-6 h-6" />
+                    <div className={`p-6 rounded-[2rem] flex items-center gap-5 border transition-all duration-500 ${tiempoAgotado ? 'bg-red-50 border-red-100' : 'bg-gray-900 border-gray-800 text-white shadow-2xl shadow-gray-200'}`}>
+                        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 ${tiempoAgotado ? 'bg-red-500 text-white animate-pulse' : 'bg-primary text-white'}`}>
+                            <Clock className="w-7 h-7" />
                         </div>
                         <div>
-                            <p className={`text-xs font-bold uppercase tracking-wider ${tiempoAgotado ? 'text-red-600' : 'text-amber-600'}`}>
-                                {tiempoAgotado ? 'Cerrado' : 'Hora Límite'}
-                            </p>
-                            <p className={`text-xl font-black ${tiempoAgotado ? 'text-red-700' : 'text-amber-700'}`}>
-                                {MENU_HOY.horaLimite} AM
+                            <p className="text-[10px] font-bold uppercase tracking-widest opacity-60">Hora Límite</p>
+                            <p className="text-2xl font-black leading-none mt-1">
+                                {formatTime12h(horaLimiteOriginal)}
                             </p>
                         </div>
                     </div>
                 </div>
 
                 {tiempoAgotado && (
-                    <div className="mt-6 p-4 bg-red-100 text-red-700 rounded-2xl flex items-center gap-3 border border-red-200">
-                        <AlertCircle className="w-6 h-6 flex-shrink-0" />
-                        <p className="text-sm font-medium">El horario de recepción de pedidos ha finalizado. Solo el personal administrador puede realizar registros extemporáneos.</p>
+                    <div className="mt-8 p-5 bg-red-100/50 text-red-700 rounded-2xl flex items-center gap-4 border border-red-100 backdrop-blur-sm">
+                        <AlertCircle className="w-8 h-8 shrink-0 text-red-500" />
+                        <div className="text-sm">
+                            <p className="font-black text-red-800 uppercase tracking-tight">¡Atención!</p>
+                            <p className="font-medium">El horario de cierre para pedidos online ha expirado. Comunícate con Administración para ingresos extemporáneos.</p>
+                        </div>
                     </div>
                 )}
             </div>
 
-            <div className={`grid grid-cols-1 lg:grid-cols-12 gap-6 ${tiempoAgotado && !isAdmin ? 'opacity-50 pointer-events-none grayscale' : ''}`}>
+            <div className={`grid grid-cols-1 lg:grid-cols-12 gap-8 ${tiempoAgotado && !isAdmin ? 'opacity-40 grayscale pointer-events-none' : ''}`}>
 
-                {/* Lado Izquierdo: Tu Selección */}
-                <div className="lg:col-span-12 xl:col-span-8 space-y-6">
-                    <div className="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-gray-100">
-                        <h2 className="text-2xl font-bold text-gray-800 mb-8 flex items-center gap-3">
-                            <CalendarCheck className="w-7 h-7 text-primary" />
-                            Tu Almuerzo Individual
-                        </h2>
+                {/* Selección Individual */}
+                <div className="lg:col-span-8 space-y-8">
+                    <div className="bg-white p-8 md:p-10 rounded-[2.5rem] shadow-sm border border-gray-100">
+                        <div className="flex items-center gap-4 mb-10">
+                            <div className="w-12 h-12 bg-primary/10 text-primary rounded-2xl flex items-center justify-center">
+                                <Utensils className="w-6 h-6" />
+                            </div>
+                            <h2 className="text-3xl font-black text-gray-800">Selección Individual</h2>
+                        </div>
 
-                        <div className="space-y-10">
+                        <div className="space-y-12">
                             {/* Entradas */}
                             <div>
-                                <label className="text-sm font-black text-gray-400 uppercase tracking-widest block mb-4">1. Selecciona tu Entrada / Sopa</label>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    {MENU_HOY.entradas.map(plato => (
-                                        <label key={plato} className={`relative flex items-center p-4 rounded-2xl border-2 cursor-pointer transition-all ${miEntrada === plato ? 'border-primary bg-primary/5 shadow-md' : 'border-gray-100 hover:border-gray-200'}`}>
-                                            <input
-                                                type="radio" name="miEntrada" value={plato}
-                                                checked={miEntrada === plato} onChange={(e) => setMiEntrada(e.target.value)}
-                                                className="sr-only"
-                                            />
-                                            <span className={`w-5 h-5 rounded-full border-2 mr-3 flex items-center justify-center ${miEntrada === plato ? 'border-primary bg-primary' : 'border-gray-300'}`}>
-                                                {miEntrada === plato && <div className="w-2 h-2 bg-white rounded-full" />}
-                                            </span>
-                                            <span className={`text-base font-semibold ${miEntrada === plato ? 'text-primary' : 'text-gray-700'}`}>{plato}</span>
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] block mb-6">1. Entrada o Sopa</label>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    {entradas.map(m => (
+                                        <label key={m.idMenuDiario} className={`group relative flex items-center p-5 rounded-3xl border-2 transition-all cursor-pointer ${miEntrada === m.idMenuDiario.toString() ? 'border-primary bg-primary/5' : 'border-gray-50 hover:bg-gray-50'}`}>
+                                            <input type="radio" name="miEntrada" value={m.idMenuDiario} checked={miEntrada === m.idMenuDiario.toString()} onChange={(e) => setMiEntrada(e.target.value)} className="sr-only" />
+                                            <div className={`w-6 h-6 rounded-full border-2 mr-4 flex items-center justify-center transition-colors ${miEntrada === m.idMenuDiario.toString() ? 'border-primary bg-primary shadow-lg shadow-primary/30' : 'border-gray-200 group-hover:border-gray-300'}`}>
+                                                {miEntrada === m.idMenuDiario.toString() && <Check className="w-4 h-4 text-white" />}
+                                            </div>
+                                            <span className={`text-lg font-bold ${miEntrada === m.idMenuDiario.toString() ? 'text-primary' : 'text-gray-700'}`}>{m.nombrePlato}</span>
                                         </label>
                                     ))}
+                                    {entradas.length === 0 && <p className="text-gray-400 font-medium italic p-4 bg-gray-50 rounded-2xl w-full">Sin opciones de entrada hoy</p>}
                                 </div>
                             </div>
 
                             {/* Segundos */}
                             <div>
-                                <label className="text-sm font-black text-gray-400 uppercase tracking-widest block mb-4">2. Selecciona tu Segundo / Fondo</label>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    {MENU_HOY.segundos.map(plato => (
-                                        <label key={plato} className={`relative flex items-center p-4 rounded-2xl border-2 cursor-pointer transition-all ${miSegundo === plato ? 'border-primary bg-primary/5 shadow-md' : 'border-gray-100 hover:border-gray-200'}`}>
-                                            <input
-                                                type="radio" name="miSegundo" value={plato}
-                                                checked={miSegundo === plato} onChange={(e) => setMiSegundo(e.target.value)}
-                                                className="sr-only"
-                                            />
-                                            <span className={`w-5 h-5 rounded-full border-2 mr-3 flex items-center justify-center ${miSegundo === plato ? 'border-primary bg-primary' : 'border-gray-300'}`}>
-                                                {miSegundo === plato && <div className="w-2 h-2 bg-white rounded-full" />}
-                                            </span>
-                                            <span className={`text-base font-semibold ${miSegundo === plato ? 'text-primary' : 'text-gray-700'}`}>{plato}</span>
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] block mb-6">2. Plato de Fondo</label>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    {segundos.map(m => (
+                                        <label key={m.idMenuDiario} className={`group relative flex items-center p-5 rounded-3xl border-2 transition-all cursor-pointer ${miSegundo === m.idMenuDiario.toString() ? 'border-primary bg-primary/5' : 'border-gray-50 hover:bg-gray-50'}`}>
+                                            <input type="radio" name="miSegundo" value={m.idMenuDiario} checked={miSegundo === m.idMenuDiario.toString()} onChange={(e) => setMiSegundo(e.target.value)} className="sr-only" />
+                                            <div className={`w-6 h-6 rounded-full border-2 mr-4 flex items-center justify-center transition-colors ${miSegundo === m.idMenuDiario.toString() ? 'border-primary bg-primary shadow-lg shadow-primary/30' : 'border-gray-200 group-hover:border-gray-300'}`}>
+                                                {miSegundo === m.idMenuDiario.toString() && <Check className="w-4 h-4 text-white" />}
+                                            </div>
+                                            <span className={`text-lg font-bold ${miSegundo === m.idMenuDiario.toString() ? 'text-primary' : 'text-gray-700'}`}>{m.nombrePlato}</span>
                                         </label>
                                     ))}
+                                    {segundos.length === 0 && <p className="text-gray-400 font-medium italic p-4 bg-gray-50 rounded-2xl w-full">Sin platos de fondo hoy</p>}
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    {/* Visitas */}
-                    <div className="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-gray-100">
-                        <div className="flex items-center justify-between mb-8">
-                            <div>
-                                <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-3">
-                                    <Users className="w-7 h-7 text-blue-500" />
-                                    Personal de Visita
-                                </h2>
-                                <p className="text-sm text-gray-500 mt-1">Si traes invitados de tu área, regístralos aquí</p>
+                    {/* Visitas Premium */}
+                    <div className="bg-white p-8 md:p-10 rounded-[2.5rem] shadow-sm border border-gray-100">
+                        <div className="flex items-center justify-between mb-10">
+                            <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 bg-blue-50 text-blue-500 rounded-2xl flex items-center justify-center">
+                                    <Users className="w-6 h-6" />
+                                </div>
+                                <div>
+                                    <h2 className="text-3xl font-black text-gray-800">Visitantes</h2>
+                                    <p className="text-sm text-gray-400 font-medium tracking-tight">Agrega raciones para externos o visitas</p>
+                                </div>
                             </div>
-                            <button
-                                onClick={addVisita}
-                                className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-xl font-bold text-sm hover:bg-blue-100 transition-colors cursor-pointer"
-                            >
-                                <UserPlus className="w-4 h-4" /> Agregar Ración
+                            <button onClick={addVisita} className="flex items-center gap-2 px-6 py-3 bg-blue-500 active:scale-95 text-white rounded-2xl font-black text-xs hover:bg-blue-600 transition-all shadow-lg shadow-blue-200 cursor-pointer">
+                                <UserPlus className="w-4 h-4" /> AGREGAR
                             </button>
                         </div>
 
                         {visitas.length === 0 ? (
-                            <div className="bg-gray-50 p-8 rounded-3xl text-center border-2 border-dashed border-gray-100">
-                                <Users className="w-12 h-12 text-gray-200 mx-auto mb-3" />
-                                <p className="text-gray-400 font-medium">No has agregado raciones para visitas aún</p>
+                            <div className="py-20 text-center border-4 border-dashed border-gray-50 rounded-[2.5rem] bg-gray-50/20">
+                                <Users className="w-12 h-12 text-gray-200 mx-auto mb-4" />
+                                <p className="text-gray-400 font-bold max-w-[200px] mx-auto opacity-60">No has registrado raciones adicionales aún.</p>
                             </div>
                         ) : (
                             <div className="space-y-6">
                                 {visitas.map((v, idx) => (
-                                    <div key={v.id} className="relative p-6 bg-gray-50 rounded-3xl border border-gray-100 group">
-                                        <button
-                                            onClick={() => removeVisita(v.id)}
-                                            className="absolute -top-2 -right-2 w-8 h-8 bg-white text-gray-400 hover:text-red-500 rounded-full shadow-md flex items-center justify-center transition-colors cursor-pointer"
-                                        >
-                                            <Trash2 className="w-4 h-4" />
+                                    <div key={v.id} className="relative p-8 bg-gray-50/50 rounded-[2rem] border border-gray-100 group animate-in slide-in-from-right-4 duration-300">
+                                        <button onClick={() => removeVisita(v.id)} className="absolute top-4 right-4 w-10 h-10 bg-white text-gray-300 hover:text-red-500 hover:rotate-12 rounded-2xl shadow-sm flex items-center justify-center transition-all cursor-pointer">
+                                            <Trash2 className="w-5 h-5" />
                                         </button>
-
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                             <div>
-                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1 ml-1">Nombre (Opcional)</label>
-                                                <input
-                                                    type="text" value={v.nombre}
-                                                    onChange={(e) => updateVisita(v.id, 'nombre', e.target.value)}
-                                                    placeholder="Ej: Juan Pérez"
-                                                    className="w-full px-4 py-2 rounded-xl border border-gray-200 text-sm focus:ring-2 focus:ring-primary/20 outline-none"
-                                                />
+                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Nombre Completo</label>
+                                                <input type="text" value={v.nombre} onChange={(e) => updateVisita(v.id, 'nombre', e.target.value)} placeholder="¿Quién nos visita?" className="w-full px-5 py-3 rounded-2xl border-2 border-transparent bg-white focus:border-blue-300 outline-none text-sm font-bold shadow-sm" />
                                             </div>
                                             <div>
-                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1 ml-1">Entrada</label>
-                                                <select
-                                                    value={v.entrada} onChange={(e) => updateVisita(v.id, 'entrada', e.target.value)}
-                                                    className="w-full px-4 py-2 rounded-xl border border-gray-200 text-sm focus:ring-2 focus:ring-primary/20 outline-none"
-                                                >
-                                                    {MENU_HO_HOY.entradas.map(p => <option key={p} value={p}>{p}</option>)}
+                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Entrada</label>
+                                                <select value={v.entrada} onChange={(e) => updateVisita(v.id, 'entrada', e.target.value)} className="w-full px-5 py-3 rounded-2xl border-2 border-transparent bg-white focus:border-blue-300 outline-none text-sm font-bold shadow-sm">
+                                                    <option value="">Ninguna</option>
+                                                    {entradas.map(m => <option key={m.idMenuDiario} value={m.idMenuDiario}>{m.nombrePlato}</option>)}
                                                 </select>
                                             </div>
                                             <div>
-                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1 ml-1">Segundo</label>
-                                                <select
-                                                    value={v.segundo} onChange={(e) => updateVisita(v.id, 'segundo', e.target.value)}
-                                                    className="w-full px-4 py-2 rounded-xl border border-gray-200 text-sm focus:ring-2 focus:ring-primary/20 outline-none"
-                                                >
-                                                    {MENU_HOY.segundos.map(p => <option key={p} value={p}>{p}</option>)}
+                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Segundo</label>
+                                                <select value={v.segundo} onChange={(e) => updateVisita(v.id, 'segundo', e.target.value)} className="w-full px-5 py-3 rounded-2xl border-2 border-transparent bg-white focus:border-blue-300 outline-none text-sm font-bold shadow-sm">
+                                                    {segundos.map(m => <option key={m.idMenuDiario} value={m.idMenuDiario}>{m.nombrePlato}</option>)}
                                                 </select>
                                             </div>
                                         </div>
@@ -316,42 +347,44 @@ export default function SeleccionMenuPage() {
                     </div>
                 </div>
 
-                {/* Resumen del Pedido Flotante (Desktop) */}
-                <div className="lg:col-span-12 xl:col-span-4 lg:sticky lg:top-6 self-start">
-                    <div className="bg-gray-900 text-white p-8 rounded-3xl shadow-2xl space-y-8">
-                        <h3 className="text-xl font-bold flex items-center gap-2">
-                            Resumen de Pedido
-                        </h3>
+                {/* Sidebar Resumen */}
+                <div className="lg:col-span-4 lg:sticky lg:top-8 self-start">
+                    <div className="bg-gray-900 bg-gradient-to-br from-gray-900 to-gray-800 text-white p-10 rounded-[2.5rem] shadow-[0_30px_60px_-15px_rgba(0,0,0,0.3)] space-y-10 border border-gray-800">
+                        <div className="space-y-2">
+                            <h3 className="text-2xl font-black">Resumen</h3>
+                            <div className="h-1 w-12 bg-primary rounded-full" />
+                        </div>
 
-                        <div className="space-y-4">
-                            <div className="flex justify-between items-end border-b border-white/10 pb-4">
-                                <div>
-                                    <p className="text-xs text-white/50 uppercase font-black tracking-widest">Tus Porciones</p>
-                                    <p className="text-lg font-bold">1 Ración</p>
-                                </div>
-                                <CheckCircle2 className={`w-6 h-6 ${(miEntrada && miSegundo) ? 'text-green-400' : 'text-white/20'}`} />
+                        <div className="space-y-6">
+                            <div className="flex justify-between items-center group">
+                                <p className="text-gray-400 font-bold text-xs uppercase tracking-widest">Tus Porciones</p>
+                                <span className={`px-4 py-1 rounded-full text-[10px] font-black tracking-widest border transition-all ${miSegundo ? 'bg-green-500/10 border-green-500 text-green-500' : 'bg-white/5 border-white/10 text-white/30'}`}>
+                                    {miSegundo ? 'LISTO' : 'PENDIENTE'}
+                                </span>
                             </div>
 
-                            <div className="flex justify-between items-end border-b border-white/10 pb-4">
-                                <div>
-                                    <p className="text-xs text-white/50 uppercase font-black tracking-widest">Visitas</p>
-                                    <p className="text-lg font-bold">{visitas.length} Invitados</p>
-                                </div>
-                                <Users className={`w-6 h-6 ${visitas.length > 0 ? 'text-blue-400' : 'text-white/20'}`} />
+                            <div className="flex justify-between items-center">
+                                <p className="text-gray-400 font-bold text-xs uppercase tracking-widest">Visitas</p>
+                                <span className="text-lg font-black">{visitas.length}</span>
                             </div>
 
-                            <div className="pt-4 flex justify-between items-center">
-                                <span className="text-3xl font-black">{1 + visitas.length}</span>
-                                <span className="text-sm font-bold text-white/60">Total Raciones</span>
+                            <div className="pt-8 border-t border-white/10">
+                                <p className="text-white/40 text-[10px] font-black uppercase tracking-widest mb-1">TOTAL RACIONES</p>
+                                <div className="flex items-baseline gap-2">
+                                    <span className="text-6xl font-black text-primary">{1 + visitas.length}</span>
+                                    <span className="text-sm font-bold text-white/40 italic">RACIONES</span>
+                                </div>
                             </div>
                         </div>
 
                         <button
                             onClick={handleConfirmar}
-                            disabled={tiempoAgotado && !isAdmin}
-                            className="w-full py-4 bg-primary hover:bg-primary-dark text-white rounded-2xl font-bold text-lg shadow-xl shadow-primary/40 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                            disabled={(tiempoAgotado && !isAdmin) || loadingPedido}
+                            className={`w-full py-5 rounded-3xl font-black text-lg transition-all flex items-center justify-center gap-3 shadow-2xl active:scale-95 cursor-pointer disabled:opacity-30 disabled:pointer-events-none 
+                                ${tiempoAgotado ? 'bg-gray-800 text-gray-500' : 'bg-primary text-white shadow-primary/30 hover:shadow-primary/50 hover:-translate-y-1'}`}
                         >
-                            Confirmar Pedido <ChevronRight className="w-5 h-5" />
+                            {loadingPedido ? 'PROCESANDO...' : 'CONFIRMAR PEDIDO'}
+                            {!loadingPedido && <ArrowRight className="w-5 h-5" />}
                         </button>
                     </div>
                 </div>
@@ -361,4 +394,4 @@ export default function SeleccionMenuPage() {
 }
 
 // Pequeño fix para el typo
-const MENU_HO_HOY = MENU_HOY;
+//const MENU_HO_HOY = MENU_HOY;
