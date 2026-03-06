@@ -4,6 +4,8 @@ import { useAuth } from '../hooks/useAuth';
 import { Leaf, Eye, EyeOff } from 'lucide-react';
 import Swal from 'sweetalert2';
 
+import logo from '../assets/agrofood.png';
+
 export default function LoginPage() {
     const { login } = useAuth();
     const navigate = useNavigate();
@@ -70,7 +72,7 @@ export default function LoginPage() {
             <div className="relative w-full max-w-md">
                 {/* Logo */}
                 <div className="text-center mb-4">
-                    <img src="../src/assets/agrofood.png" alt="Logo" className="inline-flex items-center justify-center w-60% h-60% rounded-2xl" />
+                    <img src={logo} alt="Logo" className="inline-flex items-center justify-center w-60% h-60% rounded-2xl" />
 
                     <h2>
                         <span className="text-6xl font-bold text-white">Agro</span>

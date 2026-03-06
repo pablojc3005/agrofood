@@ -28,6 +28,7 @@ export default function SeleccionMenuPage() {
     const [visitas, setVisitas] = useState([]);
     const [confirmado, setConfirmado] = useState(false);
     const [tiempoAgotado, setTiempoAgotado] = useState(false);
+    const [soloSegundoMode, setSoloSegundoMode] = useState(true); // Nuevo Modo Toggle
 
     // Obtener fecha local actual YYYY-MM-DD
     const getLocalDateStr = () => {
@@ -41,18 +42,42 @@ export default function SeleccionMenuPage() {
     const fechaHoyStr = useMemo(() => getLocalDateStr(), []);
 
     useEffect(() => {
-        fetchMenus();
-
-        const isFromModify = location.state?.fromModify;
-
-        // Verificar si ya existe un pedido hoy
-        if (user?.idUsuario && !isFromModify) {
-            fetchPedidoHoy(user.idUsuario).then(pedidoExistente => {
-                if (pedidoExistente) {
+        const checkExistingOrder = async () => {
+            if (user?.idUsuario) {
+                const pedidoExistente = await fetchPedidoHoy(user.idUsuario);
+                if (pedidoExistente && !location.state?.isModifying) {
                     setConfirmado(true);
+
+                    // Pre-poblar selecciones para visualización o futura edición
+                    // El store de pedido debería proveer estos detalles
+                    if (pedidoExistente.detalles && pedidoExistente.detalles.length > 0) {
+                        const miPedido = pedidoExistente.detalles.find(d => !d.visitante);
+                        if (miPedido) {
+                            setMiEntrada(miPedido.idMenuEntrada?.toString() || '');
+                            setMiSegundo(miPedido.idMenuSegundo?.toString() || '');
+                        }
+                    }
+                } else if (pedidoExistente && location.state?.isModifying) {
+                    // Si venimos de "Modificar", poblamos el estado
+                    const miPedido = pedidoExistente.detalles?.find(d => !d.visitante);
+                    if (miPedido) {
+                        setMiEntrada(miPedido.idMenuEntrada?.toString() || '');
+                        setMiSegundo(miPedido.idMenuSegundo?.toString() || '');
+                    }
+
+                    const visitasPedido = pedidoExistente.detalles?.filter(d => d.visitante) || [];
+                    setVisitas(visitasPedido.map(v => ({
+                        id: v.idPedidoDetalle || Date.now() + Math.random(),
+                        nombre: v.visitante.nombreVisitante,
+                        entrada: v.idMenuEntrada?.toString() || '',
+                        segundo: v.idMenuSegundo?.toString() || ''
+                    })));
                 }
-            });
-        }
+            }
+        };
+
+        fetchMenus();
+        checkExistingOrder();
     }, [fetchMenus, fetchPedidoHoy, user?.idUsuario, location.state]);
 
     // Filtrar menús usando las propiedades del DTO plano (nombrePlato, nombreCategoria)
@@ -108,11 +133,27 @@ export default function SeleccionMenuPage() {
         return () => clearInterval(timer);
     }, [checkTimeLimit]);
 
+    // Auto-activar modo Solo Segundo si el admin solo puso un segundo (y nada de entrada)
+    useEffect(() => {
+        if (menuHoyList.length > 0 && !location.state?.isModifying) {
+            const hasEntradas = entradas.length > 0;
+            const isSingleMainDish = segundos.length === 1;
+
+            if (!hasEntradas && isSingleMainDish) {
+                setSoloSegundoMode(true);
+                setMiSegundo(segundos[0].idMenuDiario.toString());
+                setMiEntrada('');
+            } else {
+                setSoloSegundoMode(false);
+            }
+        }
+    }, [menuHoyList, entradas, segundos, location.state]);
+
     const addVisita = () => {
         setVisitas([...visitas, {
             id: Date.now(),
             nombre: '',
-            entrada: entradas[0]?.idMenuDiario || '',
+            entrada: '', // Por defecto nada, para que sea "Solo segundo"
             segundo: segundos[0]?.idMenuDiario || ''
         }]);
     };
@@ -138,18 +179,18 @@ export default function SeleccionMenuPage() {
         const totalRaciones = 1 + visitas.length;
 
         const result = await Swal.fire({
-            title: '¿Confirmar pedido?',
+            title: location.state?.isModifying ? '¿Actualizar pedido?' : '¿Confirmar pedido?',
             html: `
                 <div class="text-sm text-left p-2 bg-gray-50 rounded-xl space-y-2">
-                    <p className="font-bold border-b pb-1">Para ti:</p>
-                    <p className="pl-2">${menuEntrada ? '• ' + menuEntrada.nombrePlato + '<br/>' : ''}• ${menuSegundo?.nombrePlato}</p>
+                    <p className="font-bold border-b pb-1 text-gray-700">Para ti:</p>
+                    <p className="pl-2 text-gray-600">${menuEntrada ? '• ' + menuEntrada.nombrePlato + '<br/>' : ''}• ${menuSegundo?.nombrePlato}</p>
                     ${visitas.length > 0 ? `
-                        <p className="font-bold border-b pb-1 pt-2">Visitas (${visitas.length}):</p>
+                        <p className="font-bold border-b pb-1 pt-2 text-gray-700">Visitas (${visitas.length}):</p>
                         <ul class="pl-2 space-y-1">
                             ${visitas.map(v => {
                 const ve = v.entrada ? menuHoyList.find(m => m.idMenuDiario === Number(v.entrada)) : null;
                 const vs = menuHoyList.find(m => m.idMenuDiario === Number(v.segundo));
-                return `<li class="text-xs"><strong>${v.nombre || 'Invitado'}:</strong> ${ve ? ve.nombrePlato + ' + ' : ''}${vs?.nombrePlato}</li>`;
+                return `<li class="text-xs text-gray-600"><strong>${v.nombre || 'Invitado'}:</strong> ${ve ? ve.nombrePlato + ' + ' : ''}${vs?.nombrePlato}</li>`;
             }).join('')}
                         </ul>
                     ` : ''}
@@ -161,9 +202,9 @@ export default function SeleccionMenuPage() {
             `,
             icon: 'question',
             showCancelButton: true,
-            confirmButtonColor: '#16a34a',
+            confirmButtonColor: location.state?.isModifying ? '#3b82f6' : '#16a34a',
             cancelButtonColor: '#6b7280',
-            confirmButtonText: 'Sí, registrar pedido',
+            confirmButtonText: location.state?.isModifying ? 'Actualizar Mi Pedido' : 'Sí, registrar pedido',
             cancelButtonText: 'Revisar'
         });
 
@@ -174,7 +215,9 @@ export default function SeleccionMenuPage() {
                     idTrabajador: user.idTrabajador || null,
                     idMenuEntrada: miEntrada ? Number(miEntrada) : null,
                     idMenuSegundo: Number(miSegundo),
-                    notasGenerales: `Pedido automático generado el ${getLocalDateStr()}`,
+                    notasGenerales: location.state?.isModifying
+                        ? `Pedido actualizado el ${getLocalDateStr()}`
+                        : `Pedido automático generado el ${getLocalDateStr()}`,
                     visitas: visitas.map(v => ({
                         nombreVisitante: v.nombre,
                         idMenuEntrada: v.entrada ? Number(v.entrada) : null,
@@ -185,46 +228,109 @@ export default function SeleccionMenuPage() {
                 await createPedidoCompleto(pedidoRequestDTO);
 
                 setConfirmado(true);
-                Swal.fire({ icon: 'success', title: '¡Realizado!', text: 'Tu pedido ha sido registrado exitosamente.', timer: 2000, showConfirmButton: false });
+                // Limpiar el estado de navegación para que no se quede en modo modificación
+                navigate(location.pathname, { replace: true, state: {} });
+
+                Swal.fire({
+                    icon: 'success',
+                    title: location.state?.isModifying ? '¡Actualizado!' : '¡Realizado!',
+                    text: 'Tu pedido ha sido procesado exitosamente.',
+                    timer: 2000,
+                    showConfirmButton: false
+                });
             } catch (err) {
                 Swal.fire('Error', 'No se pudo sincronizar: ' + err.message, 'error');
             }
         }
     };
 
+    const handleModificar = () => {
+        navigate(location.pathname, { state: { isModifying: true } });
+    };
+
     const fechaHoyNormalizada = new Date().toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long' });
 
-    if (confirmado) {
-        return (
-            <div className="max-w-xl mx-auto py-16 text-center animate-in fade-in zoom-in duration-500">
-                <div className="w-24 h-24 bg-green-500 text-white rounded-3xl shadow-xl shadow-green-200 flex items-center justify-center mx-auto mb-8 rotate-3">
-                    <CheckCircle2 className="w-12 h-12" />
-                </div>
-                <h1 className="text-4xl font-black text-gray-900 mb-2">¡Todo listo!</h1>
-                <p className="text-gray-500 font-medium mb-12">Disfruta de tu almuerzo, ya hemos avisado a la cocina.</p>
-                <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100 text-left space-y-6 relative overflow-hidden">
-                    <div className="absolute top-0 right-0 p-4 opacity-5"><Utensils className="w-20 h-20 rotate-12" /></div>
-                    <div>
-                        <p className="text-[10px] text-primary font-black uppercase tracking-widest mb-1">Tu Selección</p>
-                        <p className="text-xl font-bold text-gray-800 leading-tight">
-                            {miEntrada && menuHoyList.find(m => m.idMenuDiario === Number(miEntrada)) ? (
-                                <span>{menuHoyList.find(m => m.idMenuDiario === Number(miEntrada))?.nombrePlato} <br /> <ArrowRight className="inline w-4 h-4 text-gray-300 mx-2" /> </span>
-                            ) : null}
-                            {menuHoyList.find(m => m.idMenuDiario === Number(miSegundo))?.nombrePlato || 'Pedido registrado para hoy'}
-                        </p>
-                    </div>
-                </div>
+    if (confirmado && !location.state?.isModifying) {
+        const ent = miEntrada && menuHoyList.find(m => m.idMenuDiario === Number(miEntrada));
+        const seg = menuHoyList.find(m => m.idMenuDiario === Number(miSegundo));
 
-                <div className="mt-12 space-y-4">
-                    <p className="text-sm text-gray-400 font-medium">
-                        ¿Necesitas cambiar algo? Los cambios o cancelaciones se realizan desde tu historial.
-                    </p>
-                    <button
-                        onClick={() => navigate('/mi-historial')}
-                        className="px-8 py-3 bg-gray-900 text-white rounded-2xl font-bold hover:bg-gray-800 transition-all flex items-center gap-2 mx-auto"
-                    >
-                        <History className="w-4 h-4" /> Ir a Mi Historial
-                    </button>
+        return (
+            <div className="max-w-4xl mx-auto py-12 px-4 animate-in fade-in zoom-in duration-500">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+                    <div>
+                        <div className="w-20 h-20 bg-linear-to-br from-green-400 to-emerald-600 text-white rounded-3xl shadow-2xl shadow-green-200 flex items-center justify-center mb-8 transform hover:scale-110 transition-transform duration-500">
+                            <CheckCircle2 className="w-10 h-10" />
+                        </div>
+                        <h1 className="text-4xl md:text-5xl font-black text-gray-900 mb-4 tracking-tight leading-none">¡Buen provecho!</h1>
+                        <p className="text-xl text-gray-500 font-medium mb-8">Tu pedido de hoy ya está registrado en nuestro sistema.</p>
+
+                        <div className="flex flex-col sm:flex-row gap-4 mb-12">
+                            <button
+                                onClick={handleModificar}
+                                disabled={tiempoAgotado && !isAdmin}
+                                className="px-8 py-4 bg-white border-2 border-gray-100 text-gray-900 rounded-2xl font-black hover:border-blue-500 hover:text-blue-600 transition-all flex items-center justify-center gap-3 shadow-sm hover:shadow-xl disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
+                            >
+                                <Utensils className="w-5 h-5 text-blue-500" /> Modificar Pedido
+                            </button>
+                            <button
+                                onClick={() => navigate('/mi-historial')}
+                                className="px-8 py-4 bg-gray-900 text-white rounded-2xl font-black hover:bg-black transition-all flex items-center justify-center gap-3 shadow-2xl hover:shadow-gray-400 cursor-pointer"
+                            >
+                                <History className="w-5 h-5" /> Ver Mi Historial
+                            </button>
+                        </div>
+
+                        {tiempoAgotado && !isAdmin && (
+                            <p className="text-xs font-bold text-red-500 flex items-center gap-2 px-4 py-2 bg-red-50 rounded-xl">
+                                <AlertCircle className="w-4 h-4" /> La hora de cambios ha expirado
+                            </p>
+                        )}
+                    </div>
+
+                    <div className="bg-white p-8 md:p-10 rounded-[2.5rem] shadow-sm border border-gray-100 relative overflow-hidden group hover:shadow-2xl transition-all duration-500">
+                        <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:scale-110 transition-transform duration-1000">
+                            <Utensils className="w-32 h-32 rotate-12" />
+                        </div>
+                        <p className="text-[10px] text-primary font-black uppercase tracking-[0.2em] mb-6">Detalle de tu selección</p>
+
+                        <div className="space-y-8 relative z-10">
+                            <div className="flex items-start gap-4">
+                                <div className="w-10 h-10 bg-gray-50 rounded-xl flex items-center justify-center shrink-0">
+                                    <Utensils className="w-5 h-5 text-gray-400" />
+                                </div>
+                                <div>
+                                    <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Para ti</p>
+                                    <h3 className="text-2xl font-bold text-gray-800 leading-tight">
+                                        {ent ? `${ent.nombrePlato} + ` : ''}
+                                        {seg?.nombrePlato || 'Plato registrado'}
+                                    </h3>
+                                </div>
+                            </div>
+
+                            {visitas.length > 0 && (
+                                <div className="flex items-start gap-4">
+                                    <div className="w-10 h-10 bg-gray-50 rounded-xl flex items-center justify-center shrink-0">
+                                        <Users className="w-5 h-5 text-blue-400" />
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Visitas ({visitas.length})</p>
+                                        <div className="space-y-1 mt-2">
+                                            {visitas.map((v, i) => (
+                                                <p key={i} className="text-sm font-bold text-gray-600">
+                                                    • {v.nombre || 'Invitado'}: <span className="text-blue-500">{v.segundo ? menuHoyList.find(m => m.idMenuDiario === Number(v.segundo))?.nombrePlato : 'Plato'}</span>
+                                                </p>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="pt-8 border-t border-gray-50 flex justify-between items-baseline">
+                                <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Total Raciones</p>
+                                <p className="text-4xl font-black text-primary">0{1 + visitas.length}</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         );
@@ -233,7 +339,7 @@ export default function SeleccionMenuPage() {
     return (
         <div className="max-w-6xl mx-auto space-y-8 pb-20">
             {/* Header / Banner Premium */}
-            <div className="relative overflow-hidden bg-white p-8 md:p-10 rounded-[2.5rem] shadow-sm border border-gray-100">
+            <div className="relative overflow-hidden bg-white p-8 md:p-10 rounded-4xl shadow-sm border border-gray-100">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-8 relative z-10">
                     <div>
                         <div className="flex items-center gap-2 mb-2">
@@ -273,98 +379,190 @@ export default function SeleccionMenuPage() {
 
                 {/* Selección Individual */}
                 <div className="lg:col-span-8 space-y-8">
-                    <div className="bg-white p-8 md:p-10 rounded-[2.5rem] shadow-sm border border-gray-100">
-                        <div className="flex items-center gap-4 mb-10">
-                            <div className="w-12 h-12 bg-primary/10 text-primary rounded-2xl flex items-center justify-center">
-                                <Utensils className="w-6 h-6" />
+                    {/* Toggle Control Mode */}
+                    <div className="bg-white/50 backdrop-blur-sm p-4 rounded-3xl border border-gray-100 flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-3 ml-2">
+                            <div className={`p-2 rounded-xl transition-colors ${soloSegundoMode ? 'bg-amber-100 text-amber-600' : 'bg-primary/10 text-primary'}`}>
+                                {soloSegundoMode ? <Utensils className="w-5 h-5" /> : <CalendarCheck className="w-5 h-5" />}
                             </div>
-                            <h2 className="text-3xl font-black text-gray-800">Selección Individual</h2>
+                            <div>
+                                <p className="text-xs font-black uppercase tracking-tight text-gray-900">Modo de Pedido</p>
+                                <p className="text-[10px] text-gray-500 font-medium">{soloSegundoMode ? 'Menú Sugerido (Rápido)' : 'Selección Manual (Personalizado)'}</p>
+                            </div>
                         </div>
 
-                        <div className="space-y-12">
-                            {/* Entradas */}
-                            <div>
-                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] block mb-6">1. Entrada o Sopa</label>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    {entradas.map(m => (
-                                        <label key={m.idMenuDiario} className={`group relative flex items-center p-5 rounded-3xl border-2 transition-all cursor-pointer ${miEntrada === m.idMenuDiario.toString() ? 'border-primary bg-primary/5' : 'border-gray-50 hover:bg-gray-50'}`}>
-                                            <input type="radio" name="miEntrada" value={m.idMenuDiario} checked={miEntrada === m.idMenuDiario.toString()} onChange={(e) => setMiEntrada(e.target.value)} className="sr-only" />
-                                            <div className={`w-6 h-6 rounded-full border-2 mr-4 flex items-center justify-center transition-colors ${miEntrada === m.idMenuDiario.toString() ? 'border-primary bg-primary shadow-lg shadow-primary/30' : 'border-gray-200 group-hover:border-gray-300'}`}>
-                                                {miEntrada === m.idMenuDiario.toString() && <Check className="w-4 h-4 text-white" />}
-                                            </div>
-                                            <span className={`text-lg font-bold ${miEntrada === m.idMenuDiario.toString() ? 'text-primary' : 'text-gray-700'}`}>{m.nombrePlato}</span>
-                                        </label>
-                                    ))}
-                                    {entradas.length === 0 && <p className="text-gray-400 font-medium italic p-4 bg-gray-50 rounded-2xl w-full">Sin opciones de entrada hoy</p>}
-                                </div>
-                            </div>
-
-                            {/* Segundos */}
-                            <div>
-                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] block mb-6">2. Plato de Fondo</label>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    {segundos.map(m => (
-                                        <label key={m.idMenuDiario} className={`group relative flex items-center p-5 rounded-3xl border-2 transition-all cursor-pointer ${miSegundo === m.idMenuDiario.toString() ? 'border-primary bg-primary/5' : 'border-gray-50 hover:bg-gray-50'}`}>
-                                            <input type="radio" name="miSegundo" value={m.idMenuDiario} checked={miSegundo === m.idMenuDiario.toString()} onChange={(e) => setMiSegundo(e.target.value)} className="sr-only" />
-                                            <div className={`w-6 h-6 rounded-full border-2 mr-4 flex items-center justify-center transition-colors ${miSegundo === m.idMenuDiario.toString() ? 'border-primary bg-primary shadow-lg shadow-primary/30' : 'border-gray-200 group-hover:border-gray-300'}`}>
-                                                {miSegundo === m.idMenuDiario.toString() && <Check className="w-4 h-4 text-white" />}
-                                            </div>
-                                            <span className={`text-lg font-bold ${miSegundo === m.idMenuDiario.toString() ? 'text-primary' : 'text-gray-700'}`}>{m.nombrePlato}</span>
-                                        </label>
-                                    ))}
-                                    {segundos.length === 0 && <p className="text-gray-400 font-medium italic p-4 bg-gray-50 rounded-2xl w-full">Sin platos de fondo hoy</p>}
-                                </div>
-                            </div>
-                        </div>
+                        <button
+                            onClick={() => {
+                                setSoloSegundoMode(!soloSegundoMode);
+                                if (!soloSegundoMode) setMiEntrada('');
+                            }}
+                            className={`relative inline-flex h-10 w-20 items-center rounded-full transition-all duration-300 outline-none focus:ring-4 focus:ring-primary/10 cursor-pointer ${soloSegundoMode ? 'bg-amber-500 shadow-lg shadow-amber-200' : 'bg-gray-200'}`}
+                        >
+                            <span className="sr-only">Cambiar modo de menú</span>
+                            <span
+                                className={`inline-block h-8 w-8 transform rounded-full bg-white transition-all duration-300 shadow-md ${soloSegundoMode ? 'translate-x-11' : 'translate-x-1'}`}
+                            />
+                        </button>
                     </div>
 
-                    {/* Visitas Premium */}
-                    <div className="bg-white p-8 md:p-10 rounded-[2.5rem] shadow-sm border border-gray-100">
-                        <div className="flex items-center justify-between mb-10">
+                    <div className="bg-white p-8 md:p-10 rounded-4xl shadow-sm border border-gray-100 relative overflow-hidden">
+                        {soloSegundoMode && <div className="absolute top-0 right-0 w-64 h-64 bg-amber-50 rounded-full -translate-y-1/2 translate-x-1/2 -z-10 opacity-50 blur-3xl animate-pulse"></div>}
+
+                        <div className="flex items-center gap-4 mb-10 relative z-10">
+                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-colors ${soloSegundoMode ? 'bg-amber-100 text-amber-600' : 'bg-primary/10 text-primary'}`}>
+                                <Utensils className="w-6 h-6" />
+                            </div>
+                            <h2 className="text-3xl font-black text-gray-800 tracking-tight">
+                                {soloSegundoMode ? 'Menú Recomendado' : 'Selección Individual'}
+                            </h2>
+                        </div>
+
+                        {soloSegundoMode ? (
+                            <div className="space-y-8 animate-in fade-in slide-in-from-top-4 duration-500">
+                                <div className="bg-linear-to-br from-amber-50 to-orange-50/30 p-8 rounded-4xl border border-amber-100 relative group overflow-hidden">
+                                    <div className="absolute top-4 right-4 animate-bounce">
+                                        <CheckCircle2 className="w-8 h-8 text-amber-400 opacity-50" />
+                                    </div>
+                                    <p className="text-[10px] font-black text-amber-600 uppercase tracking-[0.2em] mb-4">Plato de Hoy</p>
+                                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                                        <div>
+                                            <h3 className="text-3xl font-black text-gray-900 mb-2">{segundos[0]?.nombrePlato || 'Cargando...'}</h3>
+                                            <p className="text-gray-500 font-medium">Este es el plato principal seleccionado por la administración para hoy.</p>
+                                        </div>
+                                        {/*
+                                        <div className="bg-white px-6 py-4 rounded-2xl shadow-sm border border-amber-100 flex items-center gap-3">
+                                            <span className="text-xs font-black text-amber-500">S/</span>
+                                            <span className="text-2xl font-black text-gray-800">{segundos[0]?.precioBase || '0.00'}</span>
+                                        </div>
+                                        */}
+                                    </div>
+                                    {miSegundo !== segundos[0]?.idMenuDiario?.toString() && segundos[0] && setTimeout(() => setMiSegundo(segundos[0].idMenuDiario.toString()), 0)}
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                <div>
+                                    <div className="flex items-center justify-between mb-6">
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] block">1. Entrada o Sopa</label>
+                                        {miEntrada && (
+                                            <button onClick={() => setMiEntrada('')} className="text-[10px] font-bold text-red-500 hover:text-red-600 transition-colors cursor-pointer uppercase tracking-widest flex items-center gap-1">
+                                                <Trash2 className="w-3 h-3" /> Quitar Selección
+                                            </button>
+                                        )}
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        {entradas.map(m => (
+                                            <label key={m.idMenuDiario} className={`group relative flex items-center p-5 rounded-3xl border-2 transition-all cursor-pointer ${miEntrada === m.idMenuDiario.toString() ? 'border-primary bg-primary/5' : 'border-gray-50 hover:bg-gray-50'}`}>
+                                                <input type="radio" name="miEntrada" value={m.idMenuDiario} checked={miEntrada === m.idMenuDiario.toString()} onChange={(e) => setMiEntrada(e.target.value)} className="sr-only" />
+                                                <div className={`w-6 h-6 rounded-full border-2 mr-4 flex items-center justify-center transition-colors ${miEntrada === m.idMenuDiario.toString() ? 'border-primary bg-primary shadow-lg shadow-primary/30' : 'border-gray-200 group-hover:border-gray-300'}`}>
+                                                    {miEntrada === m.idMenuDiario.toString() && <Check className="w-4 h-4 text-white" />}
+                                                </div>
+                                                <span className={`text-lg font-bold ${miEntrada === m.idMenuDiario.toString() ? 'text-primary' : 'text-gray-700'}`}>{m.nombrePlato}</span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] block mb-6">2. Plato de Fondo</label>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        {segundos.map(m => (
+                                            <label key={m.idMenuDiario} className={`group relative flex items-center p-5 rounded-3xl border-2 transition-all cursor-pointer ${miSegundo === m.idMenuDiario.toString() ? 'border-primary bg-primary/5' : 'border-gray-50 hover:bg-gray-50'}`}>
+                                                <input type="radio" name="miSegundo" value={m.idMenuDiario} checked={miSegundo === m.idMenuDiario.toString()} onChange={(e) => setMiSegundo(e.target.value)} className="sr-only" />
+                                                <div className={`w-6 h-6 rounded-full border-2 mr-4 flex items-center justify-center transition-colors ${miSegundo === m.idMenuDiario.toString() ? 'border-primary bg-primary shadow-lg shadow-primary/30' : 'border-gray-200 group-hover:border-gray-300'}`}>
+                                                    {miSegundo === m.idMenuDiario.toString() && <Check className="w-4 h-4 text-white" />}
+                                                </div>
+                                                <span className={`text-lg font-bold ${miSegundo === m.idMenuDiario.toString() ? 'text-primary' : 'text-gray-700'}`}>{m.nombrePlato}</span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Visitas Premium Rediseñadas */}
+                    <div className="bg-white p-8 md:p-10 rounded-4xl shadow-sm border border-gray-100 overflow-hidden relative">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
                             <div className="flex items-center gap-4">
                                 <div className="w-12 h-12 bg-blue-50 text-blue-500 rounded-2xl flex items-center justify-center">
                                     <Users className="w-6 h-6" />
                                 </div>
                                 <div>
-                                    <h2 className="text-3xl font-black text-gray-800">Visitantes</h2>
-                                    <p className="text-sm text-gray-400 font-medium tracking-tight">Agrega raciones para externos o visitas</p>
+                                    <h2 className="text-3xl font-black text-gray-800 tracking-tight">Visitantes</h2>
+                                    <p className="text-sm text-gray-400 font-medium">Registra raciones adicionales rápidamente</p>
                                 </div>
                             </div>
-                            <button onClick={addVisita} className="flex items-center gap-2 px-6 py-3 bg-blue-500 active:scale-95 text-white rounded-2xl font-black text-xs hover:bg-blue-600 transition-all shadow-lg shadow-blue-200 cursor-pointer">
-                                <UserPlus className="w-4 h-4" /> AGREGAR
+                            <button onClick={addVisita} className="flex items-center gap-2 px-6 py-4 bg-blue-500 active:scale-95 text-white rounded-2xl font-black text-xs hover:bg-blue-600 transition-all shadow-xl shadow-blue-200 cursor-pointer whitespace-nowrap">
+                                <UserPlus className="w-4 h-4" /> AGREGAR VISITANTE
                             </button>
                         </div>
 
                         {visitas.length === 0 ? (
-                            <div className="py-20 text-center border-4 border-dashed border-gray-50 rounded-[2.5rem] bg-gray-50/20">
+                            <div className="py-16 text-center border-4 border-dashed border-gray-50 rounded-4xl bg-gray-50/10">
                                 <Users className="w-12 h-12 text-gray-200 mx-auto mb-4" />
-                                <p className="text-gray-400 font-bold max-w-[200px] mx-auto opacity-60">No has registrado raciones adicionales aún.</p>
+                                <p className="text-gray-400 font-bold max-w-[200px] mx-auto opacity-60">Gestiona raciones extra aquí.</p>
                             </div>
                         ) : (
-                            <div className="space-y-6">
+                            <div className="space-y-4">
                                 {visitas.map((v, idx) => (
-                                    <div key={v.id} className="relative p-8 bg-gray-50/50 rounded-4xl border border-gray-100 group animate-in slide-in-from-right-4 duration-300">
-                                        <button onClick={() => removeVisita(v.id)} className="absolute top-4 right-4 w-10 h-10 bg-white text-gray-300 hover:text-red-500 hover:rotate-12 rounded-2xl shadow-sm flex items-center justify-center transition-all cursor-pointer">
+                                    <div key={v.id} className="group relative flex flex-col items-start gap-4 p-6 bg-white hover:bg-blue-50/30 rounded-3xl border border-gray-100 transition-all duration-300 animate-in slide-in-from-right-4">
+                                        {/* Delete Button Top-Right */}
+                                        <button
+                                            onClick={() => removeVisita(v.id)}
+                                            className="absolute top-4 right-4 p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all cursor-pointer z-20"
+                                            title="Eliminar visitante"
+                                        >
                                             <Trash2 className="w-5 h-5" />
                                         </button>
-                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                            <div>
-                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Nombre Completo</label>
-                                                <input type="text" value={v.nombre} onChange={(e) => updateVisita(v.id, 'nombre', e.target.value)} placeholder="¿Quién nos visita?" className="w-full px-5 py-3 rounded-2xl border-2 border-transparent bg-white focus:border-blue-300 outline-none text-sm font-bold shadow-sm" />
+
+                                        <div className="flex items-center gap-4 w-full pr-10">
+                                            <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-black text-xs shrink-0">{idx + 1}</div>
+                                            <div className="flex-1 relative">
+                                                <input type="text" value={v.nombre} onChange={(e) => updateVisita(v.id, 'nombre', e.target.value)} placeholder="Nombre del visitante..." className="w-full px-5 py-3 rounded-2xl border-2 border-transparent bg-gray-50 focus:bg-white focus:border-blue-400 outline-none text-sm font-bold transition-all" />
                                             </div>
-                                            <div>
-                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Entrada</label>
-                                                <select value={v.entrada} onChange={(e) => updateVisita(v.id, 'entrada', e.target.value)} className="w-full px-5 py-3 rounded-2xl border-2 border-transparent bg-white focus:border-blue-300 outline-none text-sm font-bold shadow-sm">
-                                                    <option value="">Ninguna</option>
-                                                    {entradas.map(m => <option key={m.idMenuDiario} value={m.idMenuDiario}>{m.nombrePlato}</option>)}
-                                                </select>
-                                            </div>
-                                            <div>
-                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Segundo</label>
-                                                <select value={v.segundo} onChange={(e) => updateVisita(v.id, 'segundo', e.target.value)} className="w-full px-5 py-3 rounded-2xl border-2 border-transparent bg-white focus:border-blue-300 outline-none text-sm font-bold shadow-sm">
-                                                    {segundos.map(m => <option key={m.idMenuDiario} value={m.idMenuDiario}>{m.nombrePlato}</option>)}
-                                                </select>
-                                            </div>
+                                        </div>
+
+                                        {/* Dish Selection for Visitors */}
+                                        <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                                            {soloSegundoMode ? (
+                                                // Quick Mode: Pre-selected main dish
+                                                <div className="md:col-span-2 flex items-center gap-3 bg-gray-50/50 p-3 rounded-2xl border border-gray-50">
+                                                    <div className="flex items-center gap-2 px-3 py-2 bg-white rounded-xl shadow-xs border border-gray-100 flex-1">
+                                                        <Utensils className="w-3.5 h-3.5 text-blue-500" />
+                                                        <span className="text-xs font-black text-gray-700 truncate">{segundos[0]?.nombrePlato || 'Plato del Día'}</span>
+                                                    </div>
+                                                    <div className={`p-1.5 rounded-lg border transition-all ${v.nombre ? 'bg-green-500 text-white border-green-500 shadow-md' : 'bg-white text-gray-200 border-gray-100'}`}>
+                                                        <Check className="w-4 h-4" />
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                // Manual Mode: Select Entrada and Segundo
+                                                <>
+                                                    <div className="space-y-1.5">
+                                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-1">Entrada / Sopa</p>
+                                                        <select
+                                                            value={v.entrada}
+                                                            onChange={(e) => updateVisita(v.id, 'entrada', e.target.value)}
+                                                            className="w-full px-4 py-2.5 rounded-xl bg-gray-50 border-2 border-transparent focus:border-blue-400 outline-none text-xs font-bold transition-all"
+                                                        >
+                                                            <option value="">Seleccionar Entrada...</option>
+                                                            {entradas.map(e => <option key={e.idMenuDiario} value={e.idMenuDiario}>{e.nombrePlato}</option>)}
+                                                        </select>
+                                                    </div>
+                                                    <div className="space-y-1.5">
+                                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-1">Plato de Fondo</p>
+                                                        <select
+                                                            value={v.segundo}
+                                                            onChange={(e) => updateVisita(v.id, 'segundo', e.target.value)}
+                                                            className="w-full px-4 py-2.5 rounded-xl bg-gray-50 border-2 border-transparent focus:border-blue-400 outline-none text-xs font-bold transition-all"
+                                                        >
+                                                            <option value="">Seleccionar...</option>
+                                                            {segundos.map(s => <option key={s.idMenuDiario} value={s.idMenuDiario}>{s.nombrePlato}</option>)}
+                                                        </select>
+                                                    </div>
+                                                </>
+                                            )}
                                         </div>
                                     </div>
                                 ))}
@@ -375,7 +573,7 @@ export default function SeleccionMenuPage() {
 
                 {/* Sidebar Resumen */}
                 <div className="lg:col-span-4 lg:sticky lg:top-8 self-start">
-                    <div className="bg-gray-900 bg-linear-to-br from-gray-900 to-gray-800 text-white p-10 rounded-[2.5rem] shadow-[0_30px_60px_-15px_rgba(0,0,0,0.3)] space-y-10 border border-gray-800">
+                    <div className="bg-gray-900 bg-linear-to-br from-gray-900 to-gray-800 text-white p-10 rounded-4xl shadow-[0_30px_60px_-15px_rgba(0,0,0,0.3)] space-y-10 border border-gray-800">
                         <div className="space-y-2">
                             <h3 className="text-2xl font-black">Resumen</h3>
                             <div className="h-1 w-12 bg-primary rounded-full" />
@@ -418,6 +616,3 @@ export default function SeleccionMenuPage() {
         </div>
     );
 }
-
-// Pequeño fix para el typo
-//const MENU_HO_HOY = MENU_HOY;

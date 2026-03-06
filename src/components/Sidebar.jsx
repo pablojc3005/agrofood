@@ -17,27 +17,54 @@ import {
 } from 'lucide-react';
 
 const adminMenu = [
-    { to: '/', label: 'Dashboard', icon: LayoutDashboard },
-    { to: '/roles', label: 'Roles', icon: ShieldUser },
-    { to: '/usuarios', label: 'Usuarios', icon: UserRoundKey },
-    { to: '/areas', label: 'Áreas', icon: Building2 },
-    { to: '/trabajadores', label: 'Trabajadores', icon: Users },
-    { to: '/categorias', label: 'Categorías Menú', icon: Tags }, // Added Categorías Menú link
-    { to: '/platos', label: 'Platos / Menú', icon: UtensilsCrossed },
-
-    { to: '/configurar-menu', label: 'Gestión Menú Diario', icon: CalendarCheck },
-    { to: '/reportes', label: 'Reportes de Consumo', icon: BarChart3 },
+    //{ to: '/', label: 'Dashboard', icon: LayoutDashboard },
+    {
+        //title: 'Menú Principal',
+        items: [
+            { to: '/', label: 'Dashboard', icon: LayoutDashboard },
+        ]
+    },
+    {
+        title: 'Gestión Maestra',
+        items: [
+            { to: '/roles', label: 'Roles', icon: ShieldUser },
+            { to: '/usuarios', label: 'Usuarios', icon: UserRoundKey },
+            { to: '/areas', label: 'Áreas', icon: Building2 },
+            { to: '/trabajadores', label: 'Trabajadores', icon: Users },
+            { to: '/categorias', label: 'Categorías Menú', icon: Tags },
+            { to: '/platos', label: 'Platos / Menú', icon: UtensilsCrossed },
+        ]
+    },
+    {
+        title: 'Operaciones',
+        items: [
+            { to: '/configurar-menu', label: 'Gestión Menú Diario', icon: CalendarCheck },
+            { to: '/reportes', label: 'Reportes de Consumo', icon: BarChart3 },
+        ]
+    },
+    {
+        title: 'Pedir Menú',
+        items: [
+            { to: '/seleccionar-menu', label: 'Seleccionar Menú', icon: CalendarCheck },
+            { to: '/mi-historial', label: 'Mi Historial', icon: History },
+        ]
+    }
 ];
 
 const empleadoMenu = [
-    { to: '/', label: 'Dashboard', icon: LayoutDashboard },
-    { to: '/seleccionar-menu', label: 'Seleccionar Menú', icon: CalendarCheck },
-    { to: '/mi-historial', label: 'Mi Historial', icon: History },
+    {
+        title: 'Menú Principal',
+        items: [
+            { to: '/', label: 'Dashboard', icon: LayoutDashboard },
+            { to: '/seleccionar-menu', label: 'Seleccionar Menú', icon: CalendarCheck },
+            { to: '/mi-historial', label: 'Mi Historial', icon: History },
+        ]
+    }
 ];
 
 export default function Sidebar({ isOpen, onClose }) {
     const { logout, user } = useAuth();
-    const menuItems = user?.role === 'ADMIN' ? adminMenu : empleadoMenu;
+    const menuGroups = user?.role === 'ADMIN' ? adminMenu : empleadoMenu;
 
     const roleBadge = user?.role === 'ADMIN'
         ? { text: 'Admin', color: 'bg-amber-500/20 text-amber-400' }
@@ -61,25 +88,6 @@ export default function Sidebar({ isOpen, onClose }) {
           ${isOpen ? 'translate-x-0' : '-translate-x-full'}
         `}
             >
-                {/* Header */}
-                <div className="flex items-center justify-between px-6 py-5 border-b border-white/10">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
-                            <Leaf className="w-6 h-6 text-white" />
-                        </div>
-                        <div>
-                            <h1 className="text-lg font-bold tracking-tight">AgroFood</h1>
-                            <p className="text-xs text-gray-400">Panel de gestión</p>
-                        </div>
-                    </div>
-                    <button
-                        onClick={onClose}
-                        className="lg:hidden p-1 rounded-lg hover:bg-white/10 transition-colors"
-                    >
-                        <X className="w-5 h-5" />
-                    </button>
-                </div>
-
                 {/* User Info */}
                 <div className="px-6 py-4 border-b border-white/10">
                     <div className="flex items-center gap-3">
@@ -89,38 +97,51 @@ export default function Sidebar({ isOpen, onClose }) {
                         <div className="overflow-hidden flex-1">
                             <p className="text-sm font-medium truncate">
                                 {user?.nombresTrabajador
-                                    ? `${user.nombresTrabajador} ${user.apellidosTrabajador || ''}`
+                                    ? `${user.nombresTrabajador} ${user.apellidosTrabajador?.split(' ')[0] || ''}`
                                     : user?.username || 'Usuario'}
                             </p>
                             <p className="text-xs text-gray-400 truncate">{user?.email || (user?.emailTrabajador || '')}</p>
                         </div>
+                        <button
+                            onClick={onClose}
+                            className="lg:hidden p-1 rounded-lg hover:bg-white/10 transition-colors"
+                        >
+                            <X className="w-5 h-5" />
+                        </button>
                     </div>
                     <span className={`inline-block mt-2 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${roleBadge.color}`}>
                         {roleBadge.text}
                     </span>
+
                 </div>
 
                 {/* Nav */}
-                <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto min-h-0">
-                    <p className="px-3 mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-500">
-                        Menú Principal
-                    </p>
-                    {menuItems.map(({ to, label, icon: Icon }) => (
-                        <NavLink
-                            key={to}
-                            to={to}
-                            end={to === '/'}
-                            onClick={onClose}
-                            className={({ isActive }) =>
-                                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${isActive
-                                    ? 'bg-primary text-white shadow-lg shadow-primary/25'
-                                    : 'text-gray-300 hover:bg-white/5 hover:text-white'
-                                }`
-                            }
-                        >
-                            <Icon className="w-5 h-5 flex-shrink-0" />
-                            <span>{label}</span>
-                        </NavLink>
+                <nav className="flex-1 px-3 py-4 space-y-6 overflow-y-auto min-h-0">
+                    {menuGroups.map((group) => (
+                        <div key={group.title}>
+                            <p className="px-3 mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+                                {group.title}
+                            </p>
+                            <div className="space-y-1">
+                                {group.items.map(({ to, label, icon: Icon }) => (
+                                    <NavLink
+                                        key={to}
+                                        to={to}
+                                        end={to === '/'}
+                                        onClick={onClose}
+                                        className={({ isActive }) =>
+                                            `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${isActive
+                                                ? 'bg-primary text-white shadow-lg shadow-primary/25'
+                                                : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                                            }`
+                                        }
+                                    >
+                                        <Icon className="w-5 h-5 flex-shrink-0" />
+                                        <span>{label}</span>
+                                    </NavLink>
+                                ))}
+                            </div>
+                        </div>
                     ))}
                 </nav>
 

@@ -1,4 +1,6 @@
+import { useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import { useDashboardStore } from '../store/useDashboardStore';
 import { Link } from 'react-router-dom';
 import {
     UtensilsCrossed,
@@ -12,12 +14,12 @@ import {
 } from 'lucide-react';
 
 // Dashboard Admin
-function AdminDashboard({ user }) {
-    const stats = [
-        { label: 'Platos Registrados', value: '24', icon: UtensilsCrossed, color: 'bg-green-500', lightColor: 'bg-green-50', textColor: 'text-green-600' },
-        { label: 'Trabajadores', value: '58', icon: Users, color: 'bg-blue-500', lightColor: 'bg-blue-50', textColor: 'text-blue-600' },
-        { label: 'Pedidos Hoy', value: '42', icon: ClipboardList, color: 'bg-amber-500', lightColor: 'bg-amber-50', textColor: 'text-amber-600' },
-        { label: 'Áreas', value: '5', icon: Building2, color: 'bg-purple-500', lightColor: 'bg-purple-50', textColor: 'text-purple-600' },
+function AdminDashboard({ user, stats, loading }) {
+    const statCards = [
+        { label: 'Platos Registrados', value: stats.platosRegistrados, icon: UtensilsCrossed, color: 'bg-green-500', lightColor: 'bg-green-50', textColor: 'text-green-600' },
+        { label: 'Trabajadores', value: stats.trabajadores, icon: Users, color: 'bg-blue-500', lightColor: 'bg-blue-50', textColor: 'text-blue-600' },
+        { label: 'Pedidos Hoy', value: stats.pedidosHoy, icon: ClipboardList, color: 'bg-amber-500', lightColor: 'bg-amber-50', textColor: 'text-amber-600' },
+        { label: 'Áreas', value: stats.areas, icon: Building2, color: 'bg-purple-500', lightColor: 'bg-purple-50', textColor: 'text-purple-600' },
     ];
 
     const acciones = [
@@ -31,21 +33,24 @@ function AdminDashboard({ user }) {
         <div className="space-y-8">
             <div>
                 <h1 className="text-2xl md:text-3xl font-bold text-gray-800">
-                    Bienvenido, <span className="text-primary">{user?.name || 'Admin'}</span> 👋
+                    Bienvenido, <span className="text-primary">{user?.nombresTrabajador || user?.username || 'Admin'}</span> 👋
                 </h1>
                 <p className="text-gray-500 mt-1">Panel de administración — resumen general del sistema.</p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-                {stats.map(({ label, value, icon: Icon, lightColor, textColor }) => (
+                {statCards.map(({ label, value, icon: Icon, lightColor, textColor }) => (
                     <div key={label} className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow duration-300">
                         <div className="flex items-center justify-between mb-4">
                             <div className={`w-12 h-12 ${lightColor} rounded-xl flex items-center justify-center`}>
                                 <Icon className={`w-6 h-6 ${textColor}`} />
                             </div>
-                            <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${lightColor} ${textColor}`}>+12%</span>
                         </div>
-                        <p className="text-3xl font-bold text-gray-800">{value}</p>
+                        {loading ? (
+                            <div className="h-9 w-16 bg-gray-200 animate-pulse rounded mb-1" />
+                        ) : (
+                            <p className="text-3xl font-bold text-gray-800">{value}</p>
+                        )}
                         <p className="text-sm text-gray-500 mt-1">{label}</p>
                     </div>
                 ))}
@@ -72,18 +77,12 @@ function AdminDashboard({ user }) {
 }
 
 // Dashboard Empleado
-function EmpleadoDashboard({ user }) {
-    const ultimosAlmuerzos = [
-        { fecha: '26 Feb 2026', plato: 'Arroz con pollo', categoria: 'Plato fuerte' },
-        { fecha: '25 Feb 2026', plato: 'Ensalada César', categoria: 'Entrada' },
-        { fecha: '24 Feb 2026', plato: 'Lomo saltado', categoria: 'Plato fuerte' },
-    ];
-
+function EmpleadoDashboard({ user, history, loading }) {
     return (
         <div className="space-y-8">
             <div>
                 <h1 className="text-2xl md:text-3xl font-bold text-gray-800">
-                    Hola, <span className="text-primary">{user?.name || 'Empleado'}</span> 👋
+                    Hola, <span className="text-primary">{user?.nombresTrabajador || user?.username || 'Empleado'}</span> 👋
                 </h1>
                 <p className="text-gray-500 mt-1">Selecciona tu menú del día o revisa tu historial.</p>
             </div>
@@ -92,7 +91,7 @@ function EmpleadoDashboard({ user }) {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Link
                     to="/seleccionar-menu"
-                    className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl p-6 text-white shadow-lg shadow-green-500/25 hover:shadow-green-500/40 transition-all group"
+                    className="bg-linear-to-br from-green-500 to-emerald-600 rounded-2xl p-6 text-white shadow-lg shadow-green-500/25 hover:shadow-green-500/40 transition-all group"
                 >
                     <div className="w-14 h-14 bg-white/20 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                         <CalendarCheck className="w-7 h-7" />
@@ -103,7 +102,7 @@ function EmpleadoDashboard({ user }) {
 
                 <Link
                     to="/mi-historial"
-                    className="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl p-6 text-white shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 transition-all group"
+                    className="bg-linear-to-br from-blue-500 to-indigo-600 rounded-2xl p-6 text-white shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 transition-all group"
                 >
                     <div className="w-14 h-14 bg-white/20 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                         <History className="w-7 h-7" />
@@ -119,22 +118,34 @@ function EmpleadoDashboard({ user }) {
                     <TrendingUp className="w-5 h-5 text-primary" />
                     Últimos Almuerzos
                 </h2>
-                <div className="space-y-3">
-                    {ultimosAlmuerzos.map((item, i) => (
-                        <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-                                    <UtensilsCrossed className="w-5 h-5 text-primary" />
+                {loading ? (
+                    <div className="space-y-3">
+                        {[1, 2, 3].map(i => (
+                            <div key={i} className="h-16 w-full bg-gray-100 animate-pulse rounded-xl" />
+                        ))}
+                    </div>
+                ) : history.length > 0 ? (
+                    <div className="space-y-3">
+                        {history.map((item, i) => (
+                            <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+                                        <UtensilsCrossed className="w-5 h-5 text-primary" />
+                                    </div>
+                                    <div>
+                                        <p className="font-medium text-gray-800">{item.segundo || 'Sin plato'}</p>
+                                        <p className="text-xs text-gray-500">{item.entrada || 'Sin entrada'}</p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <p className="font-medium text-gray-800">{item.plato}</p>
-                                    <p className="text-xs text-gray-500">{item.categoria}</p>
-                                </div>
+                                <span className="text-sm text-gray-500">{item.fecha}</span>
                             </div>
-                            <span className="text-sm text-gray-500">{item.fecha}</span>
-                        </div>
-                    ))}
-                </div>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="text-center py-8 text-gray-500">
+                        No tienes almuerzos registrados recientemente.
+                    </div>
+                )}
             </div>
         </div>
     );
@@ -142,11 +153,20 @@ function EmpleadoDashboard({ user }) {
 
 export default function DashboardPage() {
     const { user } = useAuth();
+    const { stats, userHistory, loading, fetchAdminStats, fetchUserHistory } = useDashboardStore();
 
-    // El objeto user en el store ahora tiene el nombre real y el rol del backend
+    useEffect(() => {
+        if (user?.role === 'ADMIN') {
+            fetchAdminStats();
+        }
+        if (user?.id) {
+            fetchUserHistory(user.id);
+        }
+    }, [user, fetchAdminStats, fetchUserHistory]);
+
     if (user?.role === 'ADMIN') {
-        return <AdminDashboard user={user} />;
+        return <AdminDashboard user={user} stats={stats} loading={loading} />;
     }
 
-    return <EmpleadoDashboard user={user} />;
+    return <EmpleadoDashboard user={user} history={userHistory} loading={loading} />;
 }

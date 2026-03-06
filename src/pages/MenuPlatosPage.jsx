@@ -224,7 +224,7 @@ export default function MenuPlatosPage() {
 
                         <form onSubmit={handleSubmit} className="space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1.5">Nombre del Plato *</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1.5">Nombre del Plato</label>
                                 <input
                                     type="text"
                                     value={form.nombrePlato}
@@ -237,7 +237,7 @@ export default function MenuPlatosPage() {
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Categoría *</label>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Categoría</label>
                                     <select
                                         value={form.idCategoria}
                                         onChange={(e) => setForm({ ...form, idCategoria: e.target.value })}
@@ -253,7 +253,7 @@ export default function MenuPlatosPage() {
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Precio Base *</label>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Precio Base</label>
                                     <div className="relative">
                                         <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500 font-medium">S/</span>
                                         <input
@@ -316,7 +316,7 @@ export default function MenuPlatosPage() {
                                 <button
                                     type="button"
                                     onClick={() => setShowModal(false)}
-                                    className="flex-1 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium transition-colors cursor-pointer inline-flex items-center justify-center gap-2"
+                                    className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-medium transition-colors cursor-pointer inline-flex items-center justify-center gap-2"
                                 >
                                     <X className="w-5 h-5" />
                                     Cancelar
