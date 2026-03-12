@@ -5,9 +5,10 @@ import { useMenuDiarioStore } from '../store/useMenuDiarioStore';
 import { usePlatoStore } from '../store/usePlatoStore';
 import { useCategoriaPlatoStore } from '../store/useCategoriaPlatoStore';
 import { useAuth } from '../hooks/useAuth';
+import { getLocalDateStr } from '../utils/dateUtils';
 
 const emptyForm = {
-    fechaMenu: new Date().toISOString().split('T')[0],
+    fechaMenu: getLocalDateStr(),
     idPlato: '',
     horaLimite: '10:00',
     precioDia: '',
@@ -21,8 +22,8 @@ export default function MenuDiarioPage() {
     const { platos, fetchPlatos } = usePlatoStore();
     const { categorias, fetchCategorias } = useCategoriaPlatoStore();
 
-    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-    const [globalHoraLimite, setGlobalHoraLimite] = useState('10:00');
+    const [selectedDate, setSelectedDate] = useState(getLocalDateStr());
+    const [globalHoraLimite, setGlobalHoraLimite] = useState('09:00');
     const [showModal, setShowModal] = useState(false);
     const [editingId, setEditingId] = useState(null);
     const [form, setForm] = useState(emptyForm);
@@ -45,7 +46,7 @@ export default function MenuDiarioPage() {
         if (filteredMenus.length > 0) {
             setGlobalHoraLimite(filteredMenus[0].horaLimite.substring(0, 5));
         } else {
-            setGlobalHoraLimite('10:00');
+            setGlobalHoraLimite('09:00');
         }
     }, [filteredMenus]);
 
@@ -192,14 +193,39 @@ export default function MenuDiarioPage() {
                     <label className="text-xs font-black uppercase tracking-widest text-amber-500 flex items-center gap-2 px-1">
                         <Clock className="w-3 h-3" /> Hora Límite (Global)
                     </label>
-                    <div className="relative">
-                        <input
-                            type="time"
-                            value={globalHoraLimite}
-                            onChange={(e) => setGlobalHoraLimite(e.target.value)}
-                            className="w-full md:w-48 pl-12 pr-4 py-4 rounded-2xl bg-amber-50/30 border border-amber-100 text-amber-700 focus:bg-white focus:border-amber-400 focus:ring-4 focus:ring-amber-50 outline-none transition-all font-bold"
-                        />
-                        <Clock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-amber-400" />
+                    <div className="flex items-center gap-3">
+                        <div className="relative flex-1 md:w-48">
+                            <input
+                                type="time"
+                                value={globalHoraLimite}
+                                onChange={(e) => setGlobalHoraLimite(e.target.value)}
+                                className="w-full pl-12 pr-4 py-4 rounded-2xl bg-amber-50/30 border border-amber-100 text-amber-700 focus:bg-white focus:border-amber-400 focus:ring-4 focus:ring-amber-50 outline-none transition-all font-bold"
+                            />
+                            <Clock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-amber-400" />
+                        </div>
+                        <button
+                            onClick={async () => {
+                                try {
+                                    await useMenuDiarioStore.getState().updateGlobalHoraLimite(selectedDate, globalHoraLimite);
+                                    Swal.fire({
+                                        title: '¡Actualizado!',
+                                        text: 'La hora límite ha sido aplicada a todos los platos de este día.',
+                                        icon: 'success',
+                                        toast: true,
+                                        position: 'top-end',
+                                        showConfirmButton: false,
+                                        timer: 3000
+                                    });
+                                } catch (error) {
+                                    Swal.fire('Error', 'No se pudo actualizar la hora global.', 'error');
+                                }
+                            }}
+                            disabled={loading || filteredMenus.length === 0}
+                            className="p-4 bg-amber-500 hover:bg-amber-600 text-white rounded-2xl shadow-lg shadow-amber-200 transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none group"
+                            title="Aplicar a todos los platos de esta fecha"
+                        >
+                            <Save className="w-6 h-6 group-hover:scale-110 transition-transform" />
+                        </button>
                     </div>
                 </div>
 
@@ -302,7 +328,7 @@ export default function MenuDiarioPage() {
 
                     <div className="relative bg-white rounded-4xl md:rounded-[3rem] shadow-2xl w-full max-w-xl md:max-w-2xl overflow-y-auto max-h-[90vh] lg:overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-10 duration-500">
                         {/* Modal Header */}
-                        <div className="bg-slate-50 px-6 py-8 md:px-8 md:py-10 border-b border-gray-100 relative">
+                        <div className="bg-slate-50 px-6 py-4 md:px-8 md:py-6 border-b border-gray-100 relative">
                             <div className="flex items-center gap-4">
                                 <div className={`w-12 h-12 md:w-14 md:h-14 rounded-2xl flex items-center justify-center shadow-lg shrink-0 ${editingId ? 'bg-blue-500 shadow-blue-500/20' : 'bg-primary shadow-primary/20'}`}>
                                     {editingId ? <Pencil className="w-6 h-6 md:w-7 md:h-7 text-white" /> : <Plus className="w-6 h-6 md:w-7 md:h-7 text-white" />}
@@ -322,10 +348,10 @@ export default function MenuDiarioPage() {
                             </button>
                         </div>
 
-                        <form onSubmit={handleSubmit} className="p-6 md:p-10 space-y-6 md:space-y-8">
+                        <form onSubmit={handleSubmit} className="p-6 md:p-10 space-y-4 md:space-y-6">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
                                 {/* Left Side: Selection */}
-                                <div className="space-y-6">
+                                <div className="space-y-2">
                                     <div className="space-y-2">
                                         <label className="text-xs font-black uppercase tracking-[0.15em] text-gray-400 ml-1">1. Filtrar Categoría</label>
                                         <div className="relative">
@@ -373,7 +399,7 @@ export default function MenuDiarioPage() {
                                 </div>
 
                                 {/* Right Side: Details */}
-                                <div className="space-y-6">
+                                <div className="space-y-2">
                                     <div className="space-y-2">
                                         <label className="text-xs font-black uppercase tracking-[0.15em] text-gray-400 ml-1">3. Precio del Plato *</label>
                                         <div className="relative">
@@ -420,11 +446,13 @@ export default function MenuDiarioPage() {
                                     value={form.notas}
                                     onChange={(e) => setForm({ ...form, notas: e.target.value })}
                                     placeholder="Agrega detalles adicionales si es necesario (ej: Incluye bebida fría)..."
-                                    className="w-full px-6 py-5 rounded-4xl bg-gray-50 border border-gray-100 focus:bg-white focus:border-primary focus:ring-4 focus:ring-primary/5 outline-none transition-all h-28 resize-none font-medium text-gray-700"
+                                    className="w-full px-6 py-5 rounded-4xl bg-gray-50 border border-gray-100 focus:bg-white focus:border-primary focus:ring-4 focus:ring-primary/5 outline-none transition-all h-20 resize-none font-medium text-gray-700"
                                 />
                             </div>
 
-                            <div className="flex items-center gap-4 pt-4">
+
+                            <div className="flex items-center gap-4">
+                                {/*}
                                 <button
                                     type="button"
                                     onClick={() => setShowModal(false)}
@@ -432,6 +460,7 @@ export default function MenuDiarioPage() {
                                 >
                                     Descartar
                                 </button>
+                                */}
                                 <button
                                     type="submit"
                                     disabled={loading}

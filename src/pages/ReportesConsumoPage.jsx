@@ -3,6 +3,7 @@ import { BarChart3, Search, Calendar, Users, Utensils, Download, FileSpreadsheet
 import { useReporteStore } from '../store/useReporteStore';
 import { useAreaStore } from '../store/useAreaStore';
 import { useTrabajadorStore } from '../store/useTrabajadorStore';
+import { getLocalDateStr } from '../utils/dateUtils';
 
 // Libraries for Chart and Exports
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
@@ -13,8 +14,15 @@ import autoTable from 'jspdf-autotable';
 
 export default function ReportesConsumoPage() {
     // Initial Dates
-    const today = new Date().toISOString().split('T')[0];
-    const lastWeek = new Date(new Date().setDate(new Date().getDate() - 7)).toISOString().split('T')[0];
+    const today = getLocalDateStr();
+    const lastWeek = (() => {
+        const d = new Date();
+        d.setDate(d.getDate() - 7);
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    })();
 
     // States
     const [fechaInicio, setFechaInicio] = useState(lastWeek);

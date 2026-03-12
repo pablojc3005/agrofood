@@ -58,5 +58,21 @@ export const useMenuDiarioStore = create((set, get) => ({
             set({ error: error.message, loading: false });
             throw error;
         }
+    },
+    
+    updateGlobalHoraLimite: async (fecha, horaLimite) => {
+        set({ loading: true, error: null });
+        try {
+            await api.patch(`/menus/fecha/${fecha}/hora-limite?horaLimite=${horaLimite}:00`);
+            set((state) => ({
+                menus: state.menus.map((m) => 
+                    m.fechaMenu === fecha ? { ...m, horaLimite: horaLimite + ":00" } : m
+                ),
+                loading: false
+            }));
+        } catch (error) {
+            set({ error: error.message, loading: false });
+            throw error;
+        }
     }
 }));

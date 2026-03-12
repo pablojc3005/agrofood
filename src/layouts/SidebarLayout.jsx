@@ -2,9 +2,13 @@ import { useState, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import { Menu } from 'lucide-react';
+import { useSessionTimeout } from '../hooks/useSessionTimeout';
 
 export default function SidebarLayout() {
     const [sidebarOpen, setSidebarOpen] = useState(false);
+
+    // Activar monitoreo de inactividad (3 minutos)
+    useSessionTimeout(180000);
 
     useEffect(() => {
         if (sidebarOpen) {

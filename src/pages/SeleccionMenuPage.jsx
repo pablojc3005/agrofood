@@ -11,9 +11,10 @@ import Swal from 'sweetalert2';
 import { useAuth } from '../hooks/useAuth';
 import { useMenuDiarioStore } from '../store/useMenuDiarioStore';
 import { usePedidoStore } from '../store/usePedidoStore';
+import { getLocalDateStr, formatLongDate } from '../utils/dateUtils';
 
 // Eliminamos MENU_HOY hardcodeado
-const HORA_POR_DEFECTO = '10:00';
+const HORA_POR_DEFECTO = '09:00';
 
 export default function SeleccionMenuPage() {
     const { user } = useAuth();
@@ -30,57 +31,9 @@ export default function SeleccionMenuPage() {
     const [tiempoAgotado, setTiempoAgotado] = useState(false);
     const [soloSegundoMode, setSoloSegundoMode] = useState(true); // Nuevo Modo Toggle
 
-    // Obtener fecha local actual YYYY-MM-DD
-    const getLocalDateStr = () => {
-        const d = new Date();
-        const year = d.getFullYear();
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const day = String(d.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-    };
-
     const fechaHoyStr = useMemo(() => getLocalDateStr(), []);
 
-    useEffect(() => {
-        const checkExistingOrder = async () => {
-            if (user?.idUsuario) {
-                const pedidoExistente = await fetchPedidoHoy(user.idUsuario);
-                if (pedidoExistente && !location.state?.isModifying) {
-                    setConfirmado(true);
-
-                    // Pre-poblar selecciones para visualización o futura edición
-                    // El store de pedido debería proveer estos detalles
-                    if (pedidoExistente.detalles && pedidoExistente.detalles.length > 0) {
-                        const miPedido = pedidoExistente.detalles.find(d => !d.visitante);
-                        if (miPedido) {
-                            setMiEntrada(miPedido.idMenuEntrada?.toString() || '');
-                            setMiSegundo(miPedido.idMenuSegundo?.toString() || '');
-                        }
-                    }
-                } else if (pedidoExistente && location.state?.isModifying) {
-                    // Si venimos de "Modificar", poblamos el estado
-                    const miPedido = pedidoExistente.detalles?.find(d => !d.visitante);
-                    if (miPedido) {
-                        setMiEntrada(miPedido.idMenuEntrada?.toString() || '');
-                        setMiSegundo(miPedido.idMenuSegundo?.toString() || '');
-                    }
-
-                    const visitasPedido = pedidoExistente.detalles?.filter(d => d.visitante) || [];
-                    setVisitas(visitasPedido.map(v => ({
-                        id: v.idPedidoDetalle || Date.now() + Math.random(),
-                        nombre: v.visitante.nombreVisitante,
-                        entrada: v.idMenuEntrada?.toString() || '',
-                        segundo: v.idMenuSegundo?.toString() || ''
-                    })));
-                }
-            }
-        };
-
-        fetchMenus();
-        checkExistingOrder();
-    }, [fetchMenus, fetchPedidoHoy, user?.idUsuario, location.state]);
-
-    // Filtrar menús usando las propiedades del DTO plano (nombrePlato, nombreCategoria)
+    // ✅ PRIMERO: Todos los useMemo que dependen de menus
     const menuHoyList = useMemo(() =>
         menus.filter(m => m.fechaMenu === fechaHoyStr && m.activo),
         [menus, fechaHoyStr]);
@@ -98,8 +51,104 @@ export default function SeleccionMenuPage() {
         ), [menuHoyList]);
 
     const horaLimiteOriginal = useMemo(() =>
-        menuHoyList.length > 0 ? menuHoyList[0].horaLimite : '10:00:00',
+        (menuHoyList.length > 0 && menuHoyList[0].horaLimite) ? menuHoyList[0].horaLimite : '09:00:00',
         [menuHoyList]);
+
+    // ✅ SEGUNDO: useEffect para verificar pedido existente
+    useEffect(() => {
+        const checkExistingOrder = async () => {
+            if (user?.idUsuario && menuHoyList.length > 0) {
+                const pedidoExistente = await fetchPedidoHoy(user.idUsuario);
+
+                if (pedidoExistente && !location.state?.isModifying) {
+                    setConfirmado(true);
+
+                    // Pre-poblar para vista de confirmación
+                    const detalles = pedidoExistente.detalles || [];
+                    const miEntradaDet = detalles.find(d => !d.idVisitante && d.categoriaPlato === 'ENTRADA');
+                    const miSegundoDet = detalles.find(d => !d.idVisitante && d.categoriaPlato === 'SEGUNDO');
+
+                    if (miEntradaDet) {
+                        const menuE = menuHoyList.find(m => m.idPlato === miEntradaDet.idPlato);
+                        if (menuE) setMiEntrada(menuE.idMenuDiario.toString());
+                    }
+                    if (miSegundoDet) {
+                        const menuS = menuHoyList.find(m => m.idPlato === miSegundoDet.idPlato);
+                        if (menuS) setMiSegundo(menuS.idMenuDiario.toString());
+                    }
+
+                    // Para ventas en vista confirmada
+                    const visitasGroup = {};
+                    detalles.filter(d => d.idVisitante).forEach(d => {
+                        const vid = d.idVisitante;
+                        if (!visitasGroup[vid]) {
+                            visitasGroup[vid] = {
+                                id: vid,
+                                nombre: d.nombreVisitante,
+                                entrada: '',
+                                segundo: ''
+                            };
+                        }
+                        const isEntrada = d.categoriaPlato === 'ENTRADA';
+                        const menuMatch = menuHoyList.find(m => m.idPlato === d.idPlato);
+                        if (menuMatch) {
+                            if (isEntrada) visitasGroup[vid].entrada = menuMatch.idMenuDiario.toString();
+                            else visitasGroup[vid].segundo = menuMatch.idMenuDiario.toString();
+                        }
+                    });
+                    setVisitas(Object.values(visitasGroup));
+
+                } else if (pedidoExistente && location.state?.isModifying) {
+                    // Si venimos de "Modificar", poblamos el estado editable
+                    const detalles = pedidoExistente.detalles || [];
+                    const miEntradaDet = detalles.find(d => !d.idVisitante && d.categoriaPlato === 'ENTRADA');
+                    const miSegundoDet = detalles.find(d => !d.idVisitante && d.categoriaPlato === 'SEGUNDO');
+
+                    if (miEntradaDet) {
+                        const menuE = menuHoyList.find(m => m.idPlato === miEntradaDet.idPlato);
+                        if (menuE) setMiEntrada(menuE.idMenuDiario.toString());
+                    }
+                    if (miSegundoDet) {
+                        const menuS = menuHoyList.find(m => m.idPlato === miSegundoDet.idPlato);
+                        if (menuS) setMiSegundo(menuS.idMenuDiario.toString());
+                    }
+
+                    const visitasGroup = {};
+                    detalles.filter(d => d.idVisitante).forEach(d => {
+                        const vid = d.idVisitante;
+                        if (!visitasGroup[vid]) {
+                            visitasGroup[vid] = {
+                                id: vid,
+                                nombre: d.nombreVisitante,
+                                entrada: '',
+                                segundo: ''
+                            };
+                        }
+                        const isEntrada = d.categoriaPlato === 'ENTRADA';
+                        const menuMatch = menuHoyList.find(m => m.idPlato === d.idPlato);
+                        if (menuMatch) {
+                            if (isEntrada) visitasGroup[vid].entrada = menuMatch.idMenuDiario.toString();
+                            else visitasGroup[vid].segundo = menuMatch.idMenuDiario.toString();
+                        }
+                    });
+                    setVisitas(Object.values(visitasGroup));
+
+                    // Detección de Modo: Solo Segundo si no hay entrada
+                    if (!miEntradaDet) {
+                        setSoloSegundoMode(true);
+                    } else {
+                        setSoloSegundoMode(false);
+                    }
+                }
+            }
+        };
+
+        if (menus.length === 0) {
+            fetchMenus();
+        } else {
+            checkExistingOrder();
+        }
+    }, [fetchMenus, fetchPedidoHoy, user?.idUsuario, location.state, menus, menuHoyList]);
 
     // Formatear hora de 24h a 12h para mostrarla (Ej: 15:00 -> 3:00 PM)
     const formatTime12h = (time24) => {
@@ -111,8 +160,9 @@ export default function SeleccionMenuPage() {
         return `${h12}:${m} ${ampm}`;
     };
 
+    // ✅ TERCERO: useCallback
     const checkTimeLimit = useCallback(() => {
-        if (!horaLimiteOriginal || isAdmin) return;
+        if (!horaLimiteOriginal) return;
 
         const now = new Date();
         const [h, m, s] = horaLimiteOriginal.split(':').map(Number);
@@ -127,6 +177,7 @@ export default function SeleccionMenuPage() {
         }
     }, [horaLimiteOriginal, isAdmin]);
 
+    // ✅ CUARTO: useEffect que depende de checkTimeLimit
     useEffect(() => {
         checkTimeLimit();
         const timer = setInterval(checkTimeLimit, 30000); // Check every 30s
@@ -149,6 +200,7 @@ export default function SeleccionMenuPage() {
         }
     }, [menuHoyList, entradas, segundos, location.state]);
 
+    // ✅ QUINTO: Funciones del componente
     const addVisita = () => {
         setVisitas([...visitas, {
             id: Date.now(),
@@ -159,6 +211,7 @@ export default function SeleccionMenuPage() {
     };
 
     const removeVisita = (id) => setVisitas(visitas.filter(v => v.id !== id));
+
     const updateVisita = (id, field, value) => {
         setVisitas(visitas.map(v => v.id === id ? { ...v, [field]: value } : v));
     };
@@ -245,11 +298,21 @@ export default function SeleccionMenuPage() {
     };
 
     const handleModificar = () => {
+        if (tiempoAgotado && !isAdmin) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Tiempo agotado',
+                text: 'Ya no puedes modificar tu pedido porque ha pasado la hora límite.',
+                confirmButtonColor: '#3b82f6'
+            });
+            return;
+        }
         navigate(location.pathname, { state: { isModifying: true } });
     };
 
-    const fechaHoyNormalizada = new Date().toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long' });
+    const fechaHoyNormalizada = formatLongDate(fechaHoyStr);
 
+    // ✅ VISTA DE CONFIRMACIÓN
     if (confirmado && !location.state?.isModifying) {
         const ent = miEntrada && menuHoyList.find(m => m.idMenuDiario === Number(miEntrada));
         const seg = menuHoyList.find(m => m.idMenuDiario === Number(miSegundo));
@@ -336,6 +399,7 @@ export default function SeleccionMenuPage() {
         );
     }
 
+    // ✅ VISTA PRINCIPAL DE SELECCIÓN
     return (
         <div className="max-w-6xl mx-auto space-y-8 pb-20">
             {/* Header / Banner Premium */}
@@ -375,7 +439,7 @@ export default function SeleccionMenuPage() {
                 )}
             </div>
 
-            <div className={`grid grid-cols-1 lg:grid-cols-12 gap-8 ${tiempoAgotado && !isAdmin ? 'opacity-40 grayscale pointer-events-none' : ''}`}>
+            <div className={`grid grid-cols-1 lg:grid-cols-12 gap-8 ${tiempoAgotado ? 'opacity-40 grayscale pointer-events-none' : ''}`}>
 
                 {/* Selección Individual */}
                 <div className="lg:col-span-8 space-y-8">
@@ -396,7 +460,8 @@ export default function SeleccionMenuPage() {
                                 setSoloSegundoMode(!soloSegundoMode);
                                 if (!soloSegundoMode) setMiEntrada('');
                             }}
-                            className={`relative inline-flex h-10 w-20 items-center rounded-full transition-all duration-300 outline-none focus:ring-4 focus:ring-primary/10 cursor-pointer ${soloSegundoMode ? 'bg-amber-500 shadow-lg shadow-amber-200' : 'bg-gray-200'}`}
+                            disabled={tiempoAgotado}
+                            className={`relative inline-flex h-10 w-20 items-center rounded-full transition-all duration-300 outline-none focus:ring-4 focus:ring-primary/10 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${soloSegundoMode ? 'bg-amber-500 shadow-lg shadow-amber-200' : 'bg-gray-200'}`}
                         >
                             <span className="sr-only">Cambiar modo de menú</span>
                             <span
@@ -429,12 +494,6 @@ export default function SeleccionMenuPage() {
                                             <h3 className="text-3xl font-black text-gray-900 mb-2">{segundos[0]?.nombrePlato || 'Cargando...'}</h3>
                                             <p className="text-gray-500 font-medium">Este es el plato principal seleccionado por la administración para hoy.</p>
                                         </div>
-                                        {/*
-                                        <div className="bg-white px-6 py-4 rounded-2xl shadow-sm border border-amber-100 flex items-center gap-3">
-                                            <span className="text-xs font-black text-amber-500">S/</span>
-                                            <span className="text-2xl font-black text-gray-800">{segundos[0]?.precioBase || '0.00'}</span>
-                                        </div>
-                                        */}
                                     </div>
                                     {miSegundo !== segundos[0]?.idMenuDiario?.toString() && segundos[0] && setTimeout(() => setMiSegundo(segundos[0].idMenuDiario.toString()), 0)}
                                 </div>
@@ -445,15 +504,15 @@ export default function SeleccionMenuPage() {
                                     <div className="flex items-center justify-between mb-6">
                                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] block">1. Entrada o Sopa</label>
                                         {miEntrada && (
-                                            <button onClick={() => setMiEntrada('')} className="text-[10px] font-bold text-red-500 hover:text-red-600 transition-colors cursor-pointer uppercase tracking-widest flex items-center gap-1">
+                                            <button onClick={() => setMiEntrada('')} disabled={tiempoAgotado} className="text-[10px] font-bold text-red-500 hover:text-red-600 transition-colors cursor-pointer uppercase tracking-widest flex items-center gap-1 disabled:opacity-50 disabled:pointer-events-none">
                                                 <Trash2 className="w-3 h-3" /> Quitar Selección
                                             </button>
                                         )}
                                     </div>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         {entradas.map(m => (
-                                            <label key={m.idMenuDiario} className={`group relative flex items-center p-5 rounded-3xl border-2 transition-all cursor-pointer ${miEntrada === m.idMenuDiario.toString() ? 'border-primary bg-primary/5' : 'border-gray-50 hover:bg-gray-50'}`}>
-                                                <input type="radio" name="miEntrada" value={m.idMenuDiario} checked={miEntrada === m.idMenuDiario.toString()} onChange={(e) => setMiEntrada(e.target.value)} className="sr-only" />
+                                            <label key={m.idMenuDiario} className={`group relative flex items-center p-5 rounded-3xl border-2 transition-all cursor-pointer ${miEntrada === m.idMenuDiario.toString() ? 'border-primary bg-primary/5' : 'border-gray-50 hover:bg-gray-50'} ${tiempoAgotado ? 'opacity-50 pointer-events-none' : ''}`}>
+                                                <input type="radio" name="miEntrada" value={m.idMenuDiario} checked={miEntrada === m.idMenuDiario.toString()} onChange={(e) => setMiEntrada(e.target.value)} disabled={tiempoAgotado} className="sr-only" />
                                                 <div className={`w-6 h-6 rounded-full border-2 mr-4 flex items-center justify-center transition-colors ${miEntrada === m.idMenuDiario.toString() ? 'border-primary bg-primary shadow-lg shadow-primary/30' : 'border-gray-200 group-hover:border-gray-300'}`}>
                                                     {miEntrada === m.idMenuDiario.toString() && <Check className="w-4 h-4 text-white" />}
                                                 </div>
@@ -467,8 +526,8 @@ export default function SeleccionMenuPage() {
                                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] block mb-6">2. Plato de Fondo</label>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         {segundos.map(m => (
-                                            <label key={m.idMenuDiario} className={`group relative flex items-center p-5 rounded-3xl border-2 transition-all cursor-pointer ${miSegundo === m.idMenuDiario.toString() ? 'border-primary bg-primary/5' : 'border-gray-50 hover:bg-gray-50'}`}>
-                                                <input type="radio" name="miSegundo" value={m.idMenuDiario} checked={miSegundo === m.idMenuDiario.toString()} onChange={(e) => setMiSegundo(e.target.value)} className="sr-only" />
+                                            <label key={m.idMenuDiario} className={`group relative flex items-center p-5 rounded-3xl border-2 transition-all cursor-pointer ${miSegundo === m.idMenuDiario.toString() ? 'border-primary bg-primary/5' : 'border-gray-50 hover:bg-gray-50'} ${tiempoAgotado ? 'opacity-50 pointer-events-none' : ''}`}>
+                                                <input type="radio" name="miSegundo" value={m.idMenuDiario} checked={miSegundo === m.idMenuDiario.toString()} onChange={(e) => setMiSegundo(e.target.value)} disabled={tiempoAgotado} className="sr-only" />
                                                 <div className={`w-6 h-6 rounded-full border-2 mr-4 flex items-center justify-center transition-colors ${miSegundo === m.idMenuDiario.toString() ? 'border-primary bg-primary shadow-lg shadow-primary/30' : 'border-gray-200 group-hover:border-gray-300'}`}>
                                                     {miSegundo === m.idMenuDiario.toString() && <Check className="w-4 h-4 text-white" />}
                                                 </div>
@@ -493,7 +552,7 @@ export default function SeleccionMenuPage() {
                                     <p className="text-sm text-gray-400 font-medium">Registra raciones adicionales rápidamente</p>
                                 </div>
                             </div>
-                            <button onClick={addVisita} className="flex items-center gap-2 px-6 py-4 bg-blue-500 active:scale-95 text-white rounded-2xl font-black text-xs hover:bg-blue-600 transition-all shadow-xl shadow-blue-200 cursor-pointer whitespace-nowrap">
+                            <button onClick={addVisita} disabled={tiempoAgotado} className="flex items-center gap-2 px-6 py-4 bg-blue-500 active:scale-95 text-white rounded-2xl font-black text-xs hover:bg-blue-600 transition-all shadow-xl shadow-blue-200 cursor-pointer whitespace-nowrap disabled:opacity-50 disabled:pointer-events-none">
                                 <UserPlus className="w-4 h-4" /> AGREGAR VISITANTE
                             </button>
                         </div>
@@ -510,7 +569,8 @@ export default function SeleccionMenuPage() {
                                         {/* Delete Button Top-Right */}
                                         <button
                                             onClick={() => removeVisita(v.id)}
-                                            className="absolute top-4 right-4 p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all cursor-pointer z-20"
+                                            disabled={tiempoAgotado}
+                                            className="absolute top-4 right-4 p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all cursor-pointer z-20 disabled:opacity-30 disabled:pointer-events-none"
                                             title="Eliminar visitante"
                                         >
                                             <Trash2 className="w-5 h-5" />
@@ -519,7 +579,7 @@ export default function SeleccionMenuPage() {
                                         <div className="flex items-center gap-4 w-full pr-10">
                                             <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-black text-xs shrink-0">{idx + 1}</div>
                                             <div className="flex-1 relative">
-                                                <input type="text" value={v.nombre} onChange={(e) => updateVisita(v.id, 'nombre', e.target.value)} placeholder="Nombre del visitante..." className="w-full px-5 py-3 rounded-2xl border-2 border-transparent bg-gray-50 focus:bg-white focus:border-blue-400 outline-none text-sm font-bold transition-all" />
+                                                <input type="text" value={v.nombre} onChange={(e) => updateVisita(v.id, 'nombre', e.target.value)} disabled={tiempoAgotado} placeholder="Nombre del visitante..." className="w-full px-5 py-3 rounded-2xl border-2 border-transparent bg-gray-50 focus:bg-white focus:border-blue-400 outline-none text-sm font-bold transition-all disabled:opacity-50" />
                                             </div>
                                         </div>
 
@@ -541,10 +601,11 @@ export default function SeleccionMenuPage() {
                                                 <>
                                                     <div className="space-y-1.5">
                                                         <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-1">Entrada / Sopa</p>
-                                                        <select
+                                                         <select
                                                             value={v.entrada}
                                                             onChange={(e) => updateVisita(v.id, 'entrada', e.target.value)}
-                                                            className="w-full px-4 py-2.5 rounded-xl bg-gray-50 border-2 border-transparent focus:border-blue-400 outline-none text-xs font-bold transition-all"
+                                                            disabled={tiempoAgotado}
+                                                            className="w-full px-4 py-2.5 rounded-xl bg-gray-50 border-2 border-transparent focus:border-blue-400 outline-none text-xs font-bold transition-all disabled:opacity-50"
                                                         >
                                                             <option value="">Seleccionar Entrada...</option>
                                                             {entradas.map(e => <option key={e.idMenuDiario} value={e.idMenuDiario}>{e.nombrePlato}</option>)}
@@ -552,10 +613,11 @@ export default function SeleccionMenuPage() {
                                                     </div>
                                                     <div className="space-y-1.5">
                                                         <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-1">Plato de Fondo</p>
-                                                        <select
+                                                         <select
                                                             value={v.segundo}
                                                             onChange={(e) => updateVisita(v.id, 'segundo', e.target.value)}
-                                                            className="w-full px-4 py-2.5 rounded-xl bg-gray-50 border-2 border-transparent focus:border-blue-400 outline-none text-xs font-bold transition-all"
+                                                            disabled={tiempoAgotado}
+                                                            className="w-full px-4 py-2.5 rounded-xl bg-gray-50 border-2 border-transparent focus:border-blue-400 outline-none text-xs font-bold transition-all disabled:opacity-50"
                                                         >
                                                             <option value="">Seleccionar...</option>
                                                             {segundos.map(s => <option key={s.idMenuDiario} value={s.idMenuDiario}>{s.nombrePlato}</option>)}
@@ -603,9 +665,9 @@ export default function SeleccionMenuPage() {
 
                         <button
                             onClick={handleConfirmar}
-                            disabled={(tiempoAgotado && !isAdmin) || loadingPedido}
+                            disabled={tiempoAgotado || loadingPedido}
                             className={`w-full py-5 rounded-3xl font-black text-lg transition-all flex items-center justify-center gap-3 shadow-2xl active:scale-95 cursor-pointer disabled:opacity-30 disabled:pointer-events-none 
-                                ${tiempoAgotado && !isAdmin ? 'bg-gray-800 text-gray-500' : 'bg-primary text-white shadow-primary/30 hover:shadow-primary/50 hover:-translate-y-1'}`}
+                                ${tiempoAgotado ? 'bg-gray-800 text-gray-500' : 'bg-primary text-white shadow-primary/30 hover:shadow-primary/50 hover:-translate-y-1'}`}
                         >
                             {loadingPedido ? 'PROCESANDO...' : 'CONFIRMAR PEDIDO'}
                             {!loadingPedido && <ArrowRight className="w-5 h-5" />}

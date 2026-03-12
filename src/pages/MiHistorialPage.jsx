@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
-import { History, Search, Calendar, ChevronRight, Loader2, Pencil, Trash2 } from 'lucide-react';
+import { History, Search, Calendar, ChevronRight, Loader2, Pencil, Trash2, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useHistorialStore } from '../store/useHistorialStore';
 import { usePedidoStore } from '../store/usePedidoStore';
+import { getLocalDateStr } from '../utils/dateUtils';
 import Swal from 'sweetalert2';
 
 export default function MiHistorialPage() {
@@ -17,11 +18,13 @@ export default function MiHistorialPage() {
     // Rango de fechas por defecto (mes actual)
     const [fechaDesde, setFechaDesde] = useState(() => {
         const d = new Date();
-        return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().split('T')[0];
+        const firstDay = new Date(d.getFullYear(), d.getMonth(), 1);
+        const year = firstDay.getFullYear();
+        const month = String(firstDay.getMonth() + 1).padStart(2, '0');
+        const day = String(firstDay.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
     });
-    const [fechaHasta, setFechaHasta] = useState(() => {
-        return new Date().toISOString().split('T')[0];
-    });
+    const [fechaHasta, setFechaHasta] = useState(getLocalDateStr());
 
     useEffect(() => {
         if (user?.idUsuario) {
@@ -43,16 +46,10 @@ export default function MiHistorialPage() {
         }), { raciones: 0, costo: 0 });
     }, [filtered]);
 
-    const hoyStr = useMemo(() => {
-        const d = new Date();
-        const year = d.getFullYear();
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const day = String(d.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-    }, []);
+    const hoyStr = useMemo(() => getLocalDateStr(), []);
 
     const handleModify = () => {
-        navigate('/seleccionar-menu', { state: { fromModify: true } });
+        navigate('/seleccionar-menu', { state: { isModifying: true } });
     };
 
     const handleCancel = async (idPedido) => {
@@ -191,11 +188,8 @@ export default function MiHistorialPage() {
                                                 <span className="text-base text-gray-800 font-bold group-hover:text-primary transition-colors">Segundo: {h.segundo}</span>
                                             </div>
                                         </td>
-                                        <td className="px-6 py-4">
-                                            <div className="flex flex-col">
-                                                <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-0.5">Entrada: {h.entrada || 'No especificada'}</span>
-                                                <span className="text-base text-gray-800 font-bold group-hover:text-primary transition-colors">Segundo: {h.segundo}</span>
-                                            </div>
+                                        <td className="px-6 py-4 text-center">
+                                            <span className="text-lg font-black text-gray-800">{h.totalRaciones}</span>
                                         </td>
                                         <td className="px-6 py-4 text-center">
                                             <div className="flex flex-col items-center">
@@ -213,20 +207,38 @@ export default function MiHistorialPage() {
                                             <div className="flex items-center justify-end gap-3">
                                                 {h.fecha === hoyStr && (
                                                     <div className="flex items-center gap-2 mr-4">
-                                                        <button
-                                                            onClick={handleModify}
-                                                            className="p-2 bg-amber-50 text-amber-600 rounded-xl hover:bg-amber-100 transition-colors"
-                                                            title="Modificar pedido"
-                                                        >
-                                                            <Pencil className="w-4 h-4" />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleCancel(h.idPedido)}
-                                                            className="p-2 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors"
-                                                            title="Cancelar pedido"
-                                                        >
-                                                            <Trash2 className="w-4 h-4" />
-                                                        </button>
+                                                        {(() => {
+                                                            const now = new Date();
+                                                            const [hLim, mLim, sLim] = (h.horaLimite || '09:00:00').split(':').map(Number);
+                                                            const limite = new Date();
+                                                            limite.setHours(hLim, mLim, sLim || 0, 0);
+                                                            const isExpired = now > limite;
+
+                                                            if (isExpired) return (
+                                                                <span className="text-[10px] font-bold text-red-400 bg-red-50 px-2 py-1 rounded-lg flex items-center gap-1">
+                                                                    <Clock className="w-3 h-3" /> Tiempo agotado
+                                                                </span>
+                                                            );
+
+                                                            return (
+                                                                <>
+                                                                    <button
+                                                                        onClick={handleModify}
+                                                                        className="p-2 bg-amber-50 text-amber-600 rounded-xl hover:bg-amber-100 transition-colors"
+                                                                        title="Modificar pedido"
+                                                                    >
+                                                                        <Pencil className="w-4 h-4" />
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => handleCancel(h.idPedido)}
+                                                                        className="p-2 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors"
+                                                                        title="Cancelar pedido"
+                                                                    >
+                                                                        <Trash2 className="w-4 h-4" />
+                                                                    </button>
+                                                                </>
+                                                            );
+                                                        })()}
                                                     </div>
                                                 )}
 
