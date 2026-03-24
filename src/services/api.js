@@ -10,7 +10,7 @@ const api = axios.create({
     },
 });
 
-// Interceptor de request — adjunta token automáticamente
+// Interceptor de request — adjunta token automáticamente 
 api.interceptors.request.use(
     (config) => {
         // En Zustand con persist, el store se guarda por defecto en un objeto JSON bajo la key de persistence
